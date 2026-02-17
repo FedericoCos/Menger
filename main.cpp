@@ -1,7 +1,7 @@
-#include "VulkanEngine/engine.hpp"
+#include "scene.hpp"
 
 int main(int argc, char * argv[]){
-    Engine engine;
+    Scene scene;
 
     std::array<uint32_t, 2> dimensions{0, 0};
     // Extracting title from input
@@ -12,10 +12,10 @@ int main(int argc, char * argv[]){
         dimensions[i-2] = std::atoi(argv[i]);
     }
 
-    engine.init(title, dimensions[0], dimensions[1]);
+    scene.init(title, dimensions[0], dimensions[1]);
 
-    engine.run();
+    scene.run();
 
 
-    engine.cleanup();
+    scene.cleanup();
 }
