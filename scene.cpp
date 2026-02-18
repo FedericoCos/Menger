@@ -1,6 +1,8 @@
 #include "scene.hpp"
 
 void Scene::createInitResources(){
+    original_size = cube_size; // For displacement calculations
+
     // Reserving memory for all cubes, instantiating only for one
     cube_positions.resize(MAX_CUBES);
 
@@ -67,7 +69,7 @@ void Scene::createInitResources(){
         vmaMapMemory(vma_allocator, ubo_camera_mapped[i].buffer.allocation, &ubo_camera_mapped[i].data);
     }
 
-    camera = Camera(glm::vec3(0, 0, 2));
+    camera = Camera(glm::vec3(0, 0, 2), 0.1f);
 
 
 
@@ -130,7 +132,7 @@ void Scene::updateUniformBuffers(float dtime, int current_frame)
     UniformBufferCamera ubo_camera;
 
     ubo_camera.view = camera.getViewMatrix();
-    ubo_camera.proj = camera.getProjectionMatrix(swapchain.extent.width * 1.f / swapchain.extent.height);
+    ubo_camera.proj = camera.getProjectionMatrix(swapchain.extent.width * 1.f / swapchain.extent.height, 0.1f, 1000.f);
 
     memcpy(ubo_camera_mapped[current_frame].data, &ubo_camera, sizeof(UniformBufferCamera));
 
@@ -247,6 +249,19 @@ void Scene::processInput()
         mengerStep();
         inputs[GLFW_KEY_SPACE] = InputState::RELEASED;
     }
+
+    if(inputs.count(GLFW_KEY_W) && (inputs[GLFW_KEY_W] == InputState::PRESSED || inputs[GLFW_KEY_W] == InputState::HOLD)){
+        camera.processKeyboard(CameraMovement::FORWARD, time);
+    }
+    if(inputs.count(GLFW_KEY_S) && (inputs[GLFW_KEY_S] == InputState::PRESSED || inputs[GLFW_KEY_S] == InputState::HOLD)){
+        camera.processKeyboard(CameraMovement::BACKWARD, time);
+    }
+    if(inputs.count(GLFW_KEY_A) && (inputs[GLFW_KEY_A] == InputState::PRESSED || inputs[GLFW_KEY_A] == InputState::HOLD)){
+        camera.processKeyboard(CameraMovement::LEFT, time);
+    }
+    if(inputs.count(GLFW_KEY_D) && (inputs[GLFW_KEY_D] == InputState::PRESSED || inputs[GLFW_KEY_D] == InputState::HOLD)){
+        camera.processKeyboard(CameraMovement::RIGHT, time);
+    }
 }
 
 bool isMengerHole(size_t x, size_t y, size_t z) {
@@ -270,13 +285,12 @@ void Scene::mengerStep()
     current_menger_step += 1;
     float cube_size_dim = cube_size - cube_size * 0.05;
 
-    std::cout << "Step: " << current_menger_step 
+    std::cout << "Step: " << current_menger_step
               << " | Grid: " << dimension_step << "x" << dimension_step 
               << " | Total cubes: " << new_cube_tot
               << " | Cube Size: " << cube_size << std::endl;
 
-    double start_offset = -4.5 + (cube_size / 2.0);
-    double z_center_world = -10.0;
+    double start_offset = -(original_size / 2) + (cube_size / 2.0);
     
     uint32_t index = 0;
 
@@ -286,10 +300,23 @@ void Scene::mengerStep()
                 if(isMengerHole(i, j, k)) {
                     continue; 
                 }
+
+                /* bool solid_right = (i + 1 < dimension_step) && !isMengerHole(i + 1, j, k);
+                bool solid_left  = (i > 0)                  && !isMengerHole(i - 1, j, k);
+                
+                bool solid_up    = (j + 1 < dimension_step) && !isMengerHole(i, j + 1, k);
+                bool solid_down  = (j > 0)                  && !isMengerHole(i, j - 1, k);
+                
+                bool solid_front = (k + 1 < dimension_step) && !isMengerHole(i, j, k + 1);
+                bool solid_back  = (k > 0)                  && !isMengerHole(i, j, k - 1);
+
+                if(solid_right && solid_left && solid_up && solid_down && solid_front && solid_back){
+                    continue;
+                } */
                 glm::vec3 pos(
                     start_offset + i * cube_size, 
                     start_offset + j * cube_size,
-                    -5.5 - (cube_size/2.0) - k * cube_size
+                    (center.z + original_size/2) - (cube_size/2.0) - k * cube_size
                 );
 
                 cube_positions[index] = pos;
@@ -301,7 +328,7 @@ void Scene::mengerStep()
         std::cout << "ERROR! calculated cubes: " << new_cube_tot << " Actual cubes: " << index << std::endl;
     }
     main_cube.modifyCube(glm::vec3(start_offset, start_offset, -5.5 - (cube_size/2.0)), glm::vec3(cube_size_dim));
-    current_cubes = new_cube_tot;
+    current_cubes = index;
 }
 
 

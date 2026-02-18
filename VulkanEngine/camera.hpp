@@ -7,6 +7,8 @@ class Camera {
 public:
     Camera(
         glm::vec3 position = glm::vec3(0),
+        float movement_speed = 0.0f,
+        float mouse_sensitivity = 0.0f,
         glm::vec3 up = glm::vec3(0.f, 1.f, 0.f),
         float yaw = -90.f,
         float pitch = 0.f,
@@ -19,6 +21,9 @@ public:
         this->pitch = pitch;
         this -> zoom = zoom;
         this -> world_up = world_up;
+
+        this -> movement_speed = movement_speed;
+        this -> mouse_sensitivity = mouse_sensitivity;
 
         updateCameraVectors();
     }

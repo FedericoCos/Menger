@@ -24,8 +24,9 @@ private:
     const uint32_t MAX_CUBES = 64000000;
     uint32_t current_cubes = 1;
     uint32_t current_menger_step = 1;
-    double cube_size = 9.0;
-    glm::vec3 center = glm::vec3(0.f, 0.f, -10.f);
+    double cube_size = 81.0;
+    double original_size;
+    glm::vec3 center = glm::vec3(0.f, 0.f, -100.f);
     glm::vec3 rot_speed = glm::vec3(0.05f, 0.05f, 0.0f);
     Cube main_cube;
     std::vector<glm::vec3> cube_positions;
