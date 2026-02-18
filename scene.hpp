@@ -21,13 +21,14 @@ public:
 
 private:
     // Varibales related to cube
-    const uint32_t MAX_CUBES = 3200000;
+    const uint32_t MAX_CUBES = 64000000;
     uint32_t current_cubes = 1;
     uint32_t current_menger_step = 1;
     double cube_size = 9.0;
     glm::vec3 center = glm::vec3(0.f, 0.f, -10.f);
-    float rot_speed = 0.05f;
-    std::vector<Cube> cubes;
+    glm::vec3 rot_speed = glm::vec3(0.05f, 0.05f, 0.0f);
+    Cube main_cube;
+    std::vector<glm::vec3> cube_positions;
     std::vector<MappedUBO> single_cube_ubo;
     std::vector<glm::vec4> positions;
     std::vector<MappedUBO> cube_ssbo_mapped;

@@ -2,9 +2,11 @@
 
 void Scene::createInitResources(){
     // Reserving memory for all cubes, instantiating only for one
-    cubes.reserve(MAX_CUBES);
-    cubes.push_back(Cube(glm::vec3(0, 0, -10), glm::vec3(cube_size), glm::vec3(-45.f, 45.f, 0.f), glm::vec3(0, 0, 0), glm::vec3(rot_speed, rot_speed, 0), glm::vec3(0.0), center, true));
-    cubes[0].start(vma_allocator, logical_device, queue_pool);
+    cube_positions.reserve(MAX_CUBES);
+    cube_positions.push_back(center);
+
+    main_cube = Cube(center, glm::vec3(cube_size), glm::vec3(0.0f), glm::vec3(0.0f), rot_speed, glm::vec3(0.0), center, true);
+    main_cube.start(vma_allocator, logical_device, queue_pool);
 
     // The UBO containing the per-cube info
     cube_ssbo_mapped.clear();
@@ -107,10 +109,7 @@ void Scene::createInitResources(){
     Pipeline::writeDescriptorSets(raster_pipelines[0].descriptor_sets, bindings, resources, logical_device, queue_pool.max_frames_in_flight);
     
     pip_to_obj[&raster_pipelines[0]] = std::vector<Gameobject*>();
-    pip_to_obj[&raster_pipelines[0]].reserve(cubes.size());
-    for(size_t i = 0; i < cubes.size(); i++){
-        pip_to_obj[&raster_pipelines[0]].push_back(&cubes[i]);
-    }
+    pip_to_obj[&raster_pipelines[0]].push_back(&main_cube);
 }
 
 void Scene::updateUniformBuffers(float dtime, int current_frame)
@@ -123,9 +122,9 @@ void Scene::updateUniformBuffers(float dtime, int current_frame)
     memcpy(ubo_camera_mapped[current_frame].data, &ubo_camera, sizeof(UniformBufferCamera));
 
     FirstCubeBuffer first_cube;
-    cubes[0].update(dtime);
-    first_cube.rotation_matrix = cubes[0].getRotationMatrix();
-    first_cube.center_and_scale = glm::vec4(cubes[0].getCenterVector(), cubes[0].getScaleFactor());
+    main_cube.update(dtime);
+    first_cube.rotation_matrix = main_cube.getRotationMatrix();
+    first_cube.center_and_scale = glm::vec4(main_cube.getCenterVector(), main_cube.getScaleFactor());
 
     memcpy(single_cube_ubo[current_frame].data, &first_cube, sizeof(FirstCubeBuffer));
 
@@ -134,10 +133,10 @@ void Scene::updateUniformBuffers(float dtime, int current_frame)
         if(positions.size() < current_cubes){
             positions.resize(current_cubes);
         }
-        positions[0] = glm::vec4(cubes[0].getPositionVector() - center, 1.0f);
+        positions[0] = glm::vec4(cube_positions[0] - center, 1.0f);
         size_t i = 1;
         for(; i < current_cubes/2; i++){
-            positions[i] = glm::vec4(cubes[i].getPositionVector() - center, 1.0f);
+            positions[i] = glm::vec4(cube_positions[i] - center, 1.0f);
         }
         size_t j = i - 1;
         for(; i < current_cubes; i++, j--){
@@ -266,8 +265,6 @@ void Scene::mengerStep()
     
     uint32_t index = 0;
 
-    glm::vec3 rot = cubes[0].getRotationVector();
-
     for(size_t i = 0; i < dimension_step; i++){ // x dimension
         for(size_t j = 0; j < dimension_step; j++){ // y dimension
             for(size_t k = 0; k < dimension_step; k++){ // z dimension
@@ -280,13 +277,7 @@ void Scene::mengerStep()
                     -5.5 - (cube_size/2.0) - k * cube_size
                 );
 
-                // Update or Create Cube
-                if(index < current_cubes){
-                    cubes[index].modifyCube(pos, glm::vec3(cube_size_dim));
-                }
-                else{
-                    cubes.push_back(Cube(pos, glm::vec3(cube_size_dim), rot, glm::vec3(0.0), glm::vec3(rot_speed, rot_speed, 0.0f), glm::vec3(0.0), center, false));
-                }
+                cube_positions[index] = pos;
                 index++;
             }
         }
@@ -294,12 +285,13 @@ void Scene::mengerStep()
     if(index != new_cube_tot){
         std::cout << "ERROR! calculated cubes: " << new_cube_tot << " Actual cubes: " << index << std::endl;
     }
+    main_cube.modifyCube(glm::vec3(start_offset, start_offset, -5.5 - (cube_size/2.0)), glm::vec3(cube_size_dim));
     current_cubes = new_cube_tot;
 }
 
 
 void Scene::cleanup(){
-    cubes.clear();
+    main_cube = Cube();
     single_cube_ubo.clear();
     cube_ssbo_mapped.clear();
 
