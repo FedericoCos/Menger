@@ -9,8 +9,7 @@ struct CubeBuffer{
 
 struct FirstCubeBuffer{
     glm::mat4 rotation_matrix;
-    glm::mat4 scale_matrix;
-    glm::mat4 center_matrix;
+    glm::vec4 center_and_scale;
 };
 
 class Scene : public Engine {
@@ -22,7 +21,7 @@ public:
 
 private:
     // Varibales related to cube
-    const uint32_t MAX_CUBES = 160000;
+    const uint32_t MAX_CUBES = 3200000;
     uint32_t current_cubes = 1;
     uint32_t current_menger_step = 1;
     double cube_size = 9.0;
@@ -30,6 +29,9 @@ private:
     float rot_speed = 0.05f;
     std::vector<Cube> cubes;
     std::vector<MappedUBO> single_cube_ubo;
+    std::vector<glm::vec4> positions;
+    std::vector<MappedUBO> cube_ssbo_mapped;
+    uint8_t dirty_positions = 0;
 
     // Virtual function from engine
     void createInitResources() override;

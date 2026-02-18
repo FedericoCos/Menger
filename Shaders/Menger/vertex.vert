@@ -15,35 +15,25 @@ layout(binding = 0) uniform UniformBufferCamera {
     mat4 proj;
 } cam_ubo;
 
-mat4 translate(vec4 pos){
-    return mat4(
-        vec4(1.0, 0.0, 0.0, 0.0),
-        vec4(0.0, 1.0, 0.0, 0.0),
-        vec4(0.0, 0.0, 1.0, 0.0),
-        vec4(pos.x, pos.y, pos.z, 1.0)
-    );
-}
-
-
-layout(binding = 1) uniform UniformBufferGameObject{
-    vec4 position;
-}obj_ubo[160000];
+layout(std430, binding = 1) readonly buffer CubesSSBO {
+    vec4 positions[]; 
+} obj_buffer;
 
 layout(binding = 2) uniform UniformBufferCube{
     mat4 rotate_matrix;
-    mat4 scale_matrix;
-    mat4 center_translation_matrix;
+    vec4 center_and_scale;
 }cube_ubo;
 
 void main(){
-    mat4 model = cube_ubo.center_translation_matrix * 
-                    cube_ubo.rotate_matrix * 
-                    translate(obj_ubo[gl_InstanceIndex].position) * 
-                    cube_ubo.scale_matrix;
+    vec3 pos = inPosition * cube_ubo.center_and_scale.w;
+    pos += obj_buffer.positions[gl_InstanceIndex].xyz;
 
-    vec4 position = cam_ubo.proj * cam_ubo.view * model * vec4(inPosition, 1.0);
-    gl_Position = position;
-    fragPos = position.xyz;
-    fragNorm = (model * vec4(inNormal, 0.0)).xyz;
+    mat3 rotate_matrix = mat3(cube_ubo.rotate_matrix);
+    pos = rotate_matrix * pos;
+    pos += cube_ubo.center_and_scale.xyz;
+
+    gl_Position = cam_ubo.proj * cam_ubo.view * vec4(pos, 1.0);
+    fragPos = pos;
+    fragNorm = rotate_matrix * inNormal;
     fragColor = inColor;
 }

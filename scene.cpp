@@ -7,21 +7,18 @@ void Scene::createInitResources(){
     cubes[0].start(vma_allocator, logical_device, queue_pool);
 
     // The UBO containing the per-cube info
-    ubo_objects_mapped.clear();
-    ubo_objects_mapped.resize(MAX_CUBES);
+    cube_ssbo_mapped.clear();
+    cube_ssbo_mapped.resize(queue_pool.max_frames_in_flight);
     vk::DeviceSize gameobject_buffer_size = sizeof(CubeBuffer);
-    for(size_t i = 0; i < MAX_CUBES; i++){
-        ubo_objects_mapped[i].resize(queue_pool.max_frames_in_flight);
-        for(size_t j = 0; j < queue_pool.max_frames_in_flight; j++){
-            ubo_objects_mapped[i][j].buffer = Device::createBuffer(
-                gameobject_buffer_size,
-                vk::BufferUsageFlagBits::eUniformBuffer,
-                vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-                "Gameobject Buffer",
-                vma_allocator
-            );
-            vmaMapMemory(vma_allocator, ubo_objects_mapped[i][j].buffer.allocation, &ubo_objects_mapped[i][j].data);
-        }
+    for(size_t i = 0; i < queue_pool.max_frames_in_flight; i++){
+        cube_ssbo_mapped[i].buffer = Device::createBuffer(
+            sizeof(glm::vec4) * MAX_CUBES,
+            vk::BufferUsageFlagBits::eStorageBuffer,
+            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+            "Gameobject SSBO",
+            vma_allocator
+        );
+        vmaMapMemory(vma_allocator, cube_ssbo_mapped[i].buffer.allocation, &cube_ssbo_mapped[i].data);
     }
 
     single_cube_ubo.clear();
@@ -32,7 +29,7 @@ void Scene::createInitResources(){
             single_cubo_ubo_size,
             vk::BufferUsageFlagBits::eUniformBuffer,
             vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-            "Camera Buffer",
+            "Main Cube Buffer",
             vma_allocator
         );
         vmaMapMemory(vma_allocator, single_cube_ubo[i].buffer.allocation, &single_cube_ubo[i].data);
@@ -75,8 +72,8 @@ void Scene::createInitResources(){
         // Binding 1: GameObject Uniform Buffer
         vk::DescriptorSetLayoutBinding(
             1,
-            vk::DescriptorType::eUniformBuffer,
-            MAX_CUBES,
+            vk::DescriptorType::eStorageBuffer,
+            1,
             vk::ShaderStageFlagBits::eVertex,
             nullptr
         ),
@@ -104,7 +101,7 @@ void Scene::createInitResources(){
                                                                         queue_pool.max_frames_in_flight);
     std::vector<void *> resources{
         &ubo_camera_mapped,
-        &ubo_objects_mapped,
+        &cube_ssbo_mapped,
         &single_cube_ubo
     };
     Pipeline::writeDescriptorSets(raster_pipelines[0].descriptor_sets, bindings, resources, logical_device, queue_pool.max_frames_in_flight);
@@ -128,17 +125,26 @@ void Scene::updateUniformBuffers(float dtime, int current_frame)
     FirstCubeBuffer first_cube;
     cubes[0].update(dtime);
     first_cube.rotation_matrix = cubes[0].getRotationMatrix();
-    first_cube.scale_matrix = cubes[0].getScaleMatrix();
-    first_cube.center_matrix = cubes[0].getCenterMatrix();
+    first_cube.center_and_scale = glm::vec4(cubes[0].getCenterVector(), cubes[0].getScaleFactor());
 
     memcpy(single_cube_ubo[current_frame].data, &first_cube, sizeof(FirstCubeBuffer));
 
-    CubeBuffer ubo_obj;
-    for(size_t i = 0; i < current_cubes; i++){
-        // cubes[i].update(dtime);
-        ubo_obj.position = glm::vec4(cubes[i].getPositionVector() - cubes[i].getCenterVector(), 1.0);
+    if(dirty_positions < queue_pool.max_frames_in_flight){
+        dirty_positions++;
+        if(positions.size() < current_cubes){
+            positions.resize(current_cubes);
+        }
+        positions[0] = glm::vec4(cubes[0].getPositionVector() - center, 1.0f);
+        size_t i = 1;
+        for(; i < current_cubes/2; i++){
+            positions[i] = glm::vec4(cubes[i].getPositionVector() - center, 1.0f);
+        }
+        size_t j = i - 1;
+        for(; i < current_cubes; i++, j--){
+            positions[i] = -positions[j];
+        }
 
-        memcpy(ubo_objects_mapped[i][current_frame].data, &ubo_obj, sizeof(CubeBuffer));
+        memcpy(cube_ssbo_mapped[current_frame].data, positions.data(), current_cubes * sizeof(glm::vec4));
     }
 }
 
@@ -243,6 +249,7 @@ bool isMengerHole(size_t x, size_t y, size_t z) {
 
 void Scene::mengerStep()
 {
+    dirty_positions = 0;
     uint32_t dimension_step = std::pow(3, current_menger_step);
     cube_size /= 3.0;
     uint32_t new_cube_tot = std::pow(20, current_menger_step);
@@ -294,6 +301,7 @@ void Scene::mengerStep()
 void Scene::cleanup(){
     cubes.clear();
     single_cube_ubo.clear();
+    cube_ssbo_mapped.clear();
 
     Engine::cleanup();
 }

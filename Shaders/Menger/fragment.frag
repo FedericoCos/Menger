@@ -10,8 +10,8 @@ layout(location = 0) out vec4 outColor;
 
 // Light info
 vec3 ambient = vec3(0.1, 0.1, 0.1);
-vec3 light_pos = vec3(10, 0, 10);
-vec3 light_col = vec3(1, 1, 1);
+vec3 light_pos = vec3(10, 10, 10);
+vec3 light_col = vec3(0.4);
 
 void main(){
     vec3 norm = normalize(fragNorm);

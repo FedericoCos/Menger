@@ -167,14 +167,21 @@ vk::raii::DescriptorPool Pipeline::createDescriptorPool(std::vector<vk::Descript
     std::vector<vk::DescriptorPoolSize> pool_sizes;
 
     int total_uniform_buffers = 0;
+    int total_ssbo = 0;
     for(size_t i = 0; i < bindings.size(); i++){
         if(bindings[i].descriptorType == vk::DescriptorType::eUniformBuffer){
             total_uniform_buffers += bindings[i].descriptorCount;
+        }
+        else if(bindings[i].descriptorType == vk::DescriptorType::eStorageBuffer){
+            total_ssbo += bindings[i].descriptorCount;
         }
     }
 
     if(total_uniform_buffers > 0){
         pool_sizes.push_back(vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, total_uniform_buffers));
+    }
+    if(total_ssbo > 0){
+        pool_sizes.push_back(vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, total_ssbo));
     }
 
     vk::DescriptorPoolCreateInfo pool_info;
@@ -214,7 +221,7 @@ void Pipeline::writeDescriptorSets(
         std::deque<vk::DescriptorBufferInfo> single_buffer_infos;
 
         for (size_t j = 0; j < bindings.size(); j++) {
-            if (bindings[j].descriptorType == vk::DescriptorType::eUniformBuffer) {
+            if (bindings[j].descriptorType == vk::DescriptorType::eUniformBuffer || bindings[j].descriptorType == vk::DescriptorType::eStorageBuffer) {
                 
                 if (bindings[j].descriptorCount > 1) {
                     auto &info_vec = multi_buffer_infos.emplace_back();
@@ -229,7 +236,7 @@ void Pipeline::writeDescriptorSets(
 
                     writes.push_back(vk::WriteDescriptorSet{
                         *descriptor_sets[i], bindings[j].binding, 0,
-                        bindings[j].descriptorCount, vk::DescriptorType::eUniformBuffer,
+                        bindings[j].descriptorCount, bindings[j].descriptorType,
                         nullptr, info_vec.data(), nullptr
                     });
                 } 
@@ -243,7 +250,7 @@ void Pipeline::writeDescriptorSets(
 
                     writes.push_back(vk::WriteDescriptorSet{
                         *descriptor_sets[i], bindings[j].binding, 0,
-                        1, vk::DescriptorType::eUniformBuffer,
+                        1, bindings[j].descriptorType,
                         nullptr, &info, nullptr
                     });
                 }
