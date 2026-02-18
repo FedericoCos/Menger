@@ -6,9 +6,10 @@ void Scene::createInitResources(){
     cubes.push_back(Cube(glm::vec3(0, 0, -10), glm::vec3(cube_size), glm::vec3(-45.f, 45.f, 0.f), glm::vec3(0, 0, 0), glm::vec3(rot_speed, rot_speed, 0), glm::vec3(0.0), center, true));
     cubes[0].start(vma_allocator, logical_device, queue_pool);
 
+    // The UBO containing the per-cube info
     ubo_objects_mapped.clear();
     ubo_objects_mapped.resize(MAX_CUBES);
-    vk::DeviceSize gameobject_buffer_size = sizeof(UniformBufferGameObjects);
+    vk::DeviceSize gameobject_buffer_size = sizeof(CubeBuffer);
     for(size_t i = 0; i < MAX_CUBES; i++){
         ubo_objects_mapped[i].resize(queue_pool.max_frames_in_flight);
         for(size_t j = 0; j < queue_pool.max_frames_in_flight; j++){
@@ -22,6 +23,21 @@ void Scene::createInitResources(){
             vmaMapMemory(vma_allocator, ubo_objects_mapped[i][j].buffer.allocation, &ubo_objects_mapped[i][j].data);
         }
     }
+
+    single_cube_ubo.clear();
+    single_cube_ubo.resize(queue_pool.max_frames_in_flight);
+    vk::DeviceSize single_cubo_ubo_size = sizeof(FirstCubeBuffer);
+    for(size_t i = 0; i < queue_pool.max_frames_in_flight; i++){
+        single_cube_ubo[i].buffer = Device::createBuffer(
+            single_cubo_ubo_size,
+            vk::BufferUsageFlagBits::eUniformBuffer,
+            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+            "Camera Buffer",
+            vma_allocator
+        );
+        vmaMapMemory(vma_allocator, single_cube_ubo[i].buffer.allocation, &single_cube_ubo[i].data);
+    }
+
 
     // CAMERA RESOURCES SETUP
     ubo_camera_mapped.clear();
@@ -63,7 +79,16 @@ void Scene::createInitResources(){
             MAX_CUBES,
             vk::ShaderStageFlagBits::eVertex,
             nullptr
-        )
+        ),
+
+        // Binding 2
+        vk::DescriptorSetLayoutBinding(
+            2,
+            vk::DescriptorType::eUniformBuffer,
+            1,
+            vk::ShaderStageFlagBits::eVertex,
+            nullptr
+        ),
     };
     std::string name = "dumb pipeline";
     raster_pipelines.push_back(Pipeline::createsRasterPipeline(vertex_shader_path, fragment_shader_path,
@@ -79,7 +104,8 @@ void Scene::createInitResources(){
                                                                         queue_pool.max_frames_in_flight);
     std::vector<void *> resources{
         &ubo_camera_mapped,
-        &ubo_objects_mapped
+        &ubo_objects_mapped,
+        &single_cube_ubo
     };
     Pipeline::writeDescriptorSets(raster_pipelines[0].descriptor_sets, bindings, resources, logical_device, queue_pool.max_frames_in_flight);
     
@@ -99,12 +125,20 @@ void Scene::updateUniformBuffers(float dtime, int current_frame)
 
     memcpy(ubo_camera_mapped[current_frame].data, &ubo_camera, sizeof(UniformBufferCamera));
 
-    UniformBufferGameObjects ubo_obj;
-    for(size_t i = 0; i < current_cubes; i++){
-        cubes[i].update(dtime);
-        ubo_obj.model = cubes[i].getModelMat();
+    FirstCubeBuffer first_cube;
+    cubes[0].update(dtime);
+    first_cube.rotation_matrix = cubes[0].getRotationMatrix();
+    first_cube.scale_matrix = cubes[0].getScaleMatrix();
+    first_cube.center_matrix = cubes[0].getCenterMatrix();
 
-        memcpy(ubo_objects_mapped[i][current_frame].data, &ubo_obj, sizeof(UniformBufferGameObjects));
+    memcpy(single_cube_ubo[current_frame].data, &first_cube, sizeof(FirstCubeBuffer));
+
+    CubeBuffer ubo_obj;
+    for(size_t i = 0; i < current_cubes; i++){
+        // cubes[i].update(dtime);
+        ubo_obj.position = glm::vec4(cubes[i].getPositionVector() - cubes[i].getCenterVector(), 1.0);
+
+        memcpy(ubo_objects_mapped[i][current_frame].data, &ubo_obj, sizeof(CubeBuffer));
     }
 }
 
@@ -164,7 +198,6 @@ void Scene::recordCommandBuffer(uint32_t image_index)
             *raster_pipelines[i].descriptor_sets[current_frame],
             {}
         );
-        UniformBufferGameObjects ubo_obj;
         command_buffer.bindVertexBuffers(0, pip_to_obj[&raster_pipelines[i]][0] -> getVertexBuffer(), {0});
         command_buffer.bindIndexBuffer(pip_to_obj[&raster_pipelines[i]][0] -> getIndexBuffer(), 0, vk::IndexType::eUint32);
         command_buffer.drawIndexed(pip_to_obj[&raster_pipelines[i]][0] -> getIndexSize(), current_cubes, 0, 0, 0);
@@ -260,6 +293,7 @@ void Scene::mengerStep()
 
 void Scene::cleanup(){
     cubes.clear();
+    single_cube_ubo.clear();
 
     Engine::cleanup();
 }

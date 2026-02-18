@@ -3,6 +3,16 @@
 #include "VulkanEngine/engine.hpp"
 #include "cube.hpp"
 
+struct CubeBuffer{
+    glm::vec4 position;
+};
+
+struct FirstCubeBuffer{
+    glm::mat4 rotation_matrix;
+    glm::mat4 scale_matrix;
+    glm::mat4 center_matrix;
+};
+
 class Scene : public Engine {
 public:
 
@@ -19,6 +29,7 @@ private:
     glm::vec3 center = glm::vec3(0.f, 0.f, -10.f);
     float rot_speed = 0.05f;
     std::vector<Cube> cubes;
+    std::vector<MappedUBO> single_cube_ubo;
 
     // Virtual function from engine
     void createInitResources() override;

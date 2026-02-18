@@ -15,14 +15,35 @@ layout(binding = 0) uniform UniformBufferCamera {
     mat4 proj;
 } cam_ubo;
 
+mat4 translate(vec4 pos){
+    return mat4(
+        vec4(1.0, 0.0, 0.0, 0.0),
+        vec4(0.0, 1.0, 0.0, 0.0),
+        vec4(0.0, 0.0, 1.0, 0.0),
+        vec4(pos.x, pos.y, pos.z, 1.0)
+    );
+}
+
+
 layout(binding = 1) uniform UniformBufferGameObject{
-    mat4 model;
+    vec4 position;
 }obj_ubo[160000];
 
+layout(binding = 2) uniform UniformBufferCube{
+    mat4 rotate_matrix;
+    mat4 scale_matrix;
+    mat4 center_translation_matrix;
+}cube_ubo;
+
 void main(){
-    vec4 position = cam_ubo.proj * cam_ubo.view * obj_ubo[gl_InstanceIndex].model * vec4(inPosition, 1.0);
+    mat4 model = cube_ubo.center_translation_matrix * 
+                    cube_ubo.rotate_matrix * 
+                    translate(obj_ubo[gl_InstanceIndex].position) * 
+                    cube_ubo.scale_matrix;
+
+    vec4 position = cam_ubo.proj * cam_ubo.view * model * vec4(inPosition, 1.0);
     gl_Position = position;
     fragPos = position.xyz;
-    fragNorm = (obj_ubo[gl_InstanceIndex].model * vec4(inNormal, 0.0)).xyz;
+    fragNorm = (model * vec4(inNormal, 0.0)).xyz;
     fragColor = inColor;
 }

@@ -109,6 +109,42 @@ public:
         return rotation;
     }
 
+    const glm::mat4 getRotationMatrix(){
+        glm::mat4 mat(1.0f);
+        if(rotation.x != 0.0){
+            mat = glm::rotate(mat, glm::radians(rotation.x), glm::vec3(1, 0, 0));
+        }
+        if(rotation.y != 0.0){
+            mat = glm::rotate(mat, glm::radians(rotation.y), glm::vec3(0,1, 0));
+        }
+        if(rotation.z != 0.0){
+            mat = glm::rotate(mat, glm::radians(rotation.z), glm::vec3(0, 0, 1));
+        }
+
+        return mat;
+    }
+
+    const glm::mat4 getScaleMatrix(){
+        return glm::scale(glm::mat4(1.0f), scale);
+    }
+
+    const glm::vec3 &getPositionVector(){
+        return position;
+    }
+
+    const float &getScaleFactor(){
+        return scale.x;
+    }
+
+    const glm::vec3 &getCenterVector(){
+        return center;
+    }
+
+    const glm::mat4 getCenterMatrix(){
+        return glm::translate(glm::mat4(1.0), center);
+    }
+
+
 private:
     glm::vec3 center;
 
