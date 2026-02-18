@@ -1,18 +1,15 @@
 #include "scene.hpp"
 
 void Scene::createInitResources(){
-
-    int total_obj = 10;
-    objects.reserve(total_obj);
-    for(int i = 0; i < total_obj; i++){
-        objects.push_back(Gameobject(glm::vec3(-(total_obj/2) + i, 0, -5), glm::vec3(1), glm::vec3(-45.f, 45.f, 0.f), glm::vec3(0, 0, 0), glm::vec3(.1f, .1f, 0)));
-    }
-    objects[0].start(vma_allocator, logical_device, queue_pool);
+    // Reserving memory for all cubes, instantiating only for one
+    cubes.reserve(MAX_CUBES);
+    cubes.push_back(Cube(glm::vec3(0, 0, -10), glm::vec3(cube_size), glm::vec3(-45.f, 45.f, 0.f), glm::vec3(0, 0, 0), glm::vec3(rot_speed, rot_speed, 0), glm::vec3(0.0), center, true));
+    cubes[0].start(vma_allocator, logical_device, queue_pool);
 
     ubo_objects_mapped.clear();
-    ubo_objects_mapped.resize(total_obj);
+    ubo_objects_mapped.resize(MAX_CUBES);
     vk::DeviceSize gameobject_buffer_size = sizeof(UniformBufferGameObjects);
-    for(size_t i = 0; i < total_obj; i++){
+    for(size_t i = 0; i < MAX_CUBES; i++){
         ubo_objects_mapped[i].resize(queue_pool.max_frames_in_flight);
         for(size_t j = 0; j < queue_pool.max_frames_in_flight; j++){
             ubo_objects_mapped[i][j].buffer = Device::createBuffer(
@@ -46,8 +43,8 @@ void Scene::createInitResources(){
 
 
 
-    const std::string vertex_shader_path = "Shaders/Samples/vertex.vert.spv";
-    const std::string fragment_shader_path = "Shaders/Samples/fragment.frag.spv";
+    const std::string vertex_shader_path = "Shaders/Menger/vertex.vert.spv";
+    const std::string fragment_shader_path = "Shaders/Menger/fragment.frag.spv";
 
     std::vector<vk::DescriptorSetLayoutBinding> bindings = {
         // Binding 0: Camera Uniform Object
@@ -63,7 +60,7 @@ void Scene::createInitResources(){
         vk::DescriptorSetLayoutBinding(
             1,
             vk::DescriptorType::eUniformBuffer,
-            total_obj,
+            MAX_CUBES,
             vk::ShaderStageFlagBits::eVertex,
             nullptr
         )
@@ -85,12 +82,11 @@ void Scene::createInitResources(){
         &ubo_objects_mapped
     };
     Pipeline::writeDescriptorSets(raster_pipelines[0].descriptor_sets, bindings, resources, logical_device, queue_pool.max_frames_in_flight);
-
     
     pip_to_obj[&raster_pipelines[0]] = std::vector<Gameobject*>();
-    pip_to_obj[&raster_pipelines[0]].reserve(objects.size());
-    for(size_t i = 0; i < objects.size(); i++){
-        pip_to_obj[&raster_pipelines[0]].push_back(&objects[i]);
+    pip_to_obj[&raster_pipelines[0]].reserve(cubes.size());
+    for(size_t i = 0; i < cubes.size(); i++){
+        pip_to_obj[&raster_pipelines[0]].push_back(&cubes[i]);
     }
 }
 
@@ -104,9 +100,9 @@ void Scene::updateUniformBuffers(float dtime, int current_frame)
     memcpy(ubo_camera_mapped[current_frame].data, &ubo_camera, sizeof(UniformBufferCamera));
 
     UniformBufferGameObjects ubo_obj;
-    for(size_t i = 0; i < objects.size(); i++){
-        objects[i].update(dtime);
-        ubo_obj.model = objects[i].getModelMat();
+    for(size_t i = 0; i < current_cubes; i++){
+        cubes[i].update(dtime);
+        ubo_obj.model = cubes[i].getModelMat();
 
         memcpy(ubo_objects_mapped[i][current_frame].data, &ubo_obj, sizeof(UniformBufferGameObjects));
     }
@@ -135,12 +131,22 @@ void Scene::recordCommandBuffer(uint32_t image_index)
     attachment_info.storeOp = vk::AttachmentStoreOp::eStore;
     attachment_info.clearValue = clear_color;
 
+    vk::ClearValue depth_clear_value;
+    depth_clear_value.depthStencil = vk::ClearDepthStencilValue(1.0f, 0);
+    vk::RenderingAttachmentInfo depth_attachment_info{};
+    depth_attachment_info.imageView = *depth_image.image_view; 
+    depth_attachment_info.imageLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
+    depth_attachment_info.loadOp = vk::AttachmentLoadOp::eClear;
+    depth_attachment_info.storeOp = vk::AttachmentStoreOp::eDontCare;
+    depth_attachment_info.clearValue = depth_clear_value;
+
     vk::RenderingInfo rendering_info{};
     rendering_info.renderArea.offset = vk::Offset2D{0, 0};
     rendering_info.renderArea.extent = swapchain.extent;
     rendering_info.layerCount = 1;
     rendering_info.colorAttachmentCount = 1;
     rendering_info.pColorAttachments = &attachment_info;
+    rendering_info.pDepthAttachment = &depth_attachment_info;
 
     command_buffer.beginRendering(rendering_info);
     if(raster_pipelines.size() <= 0){
@@ -161,7 +167,7 @@ void Scene::recordCommandBuffer(uint32_t image_index)
         UniformBufferGameObjects ubo_obj;
         command_buffer.bindVertexBuffers(0, pip_to_obj[&raster_pipelines[i]][0] -> getVertexBuffer(), {0});
         command_buffer.bindIndexBuffer(pip_to_obj[&raster_pipelines[i]][0] -> getIndexBuffer(), 0, vk::IndexType::eUint32);
-        command_buffer.drawIndexed(pip_to_obj[&raster_pipelines[i]][0] -> getIndexSize(), objects.size(), 0, 0, 0);
+        command_buffer.drawIndexed(pip_to_obj[&raster_pipelines[i]][0] -> getIndexSize(), current_cubes, 0, 0, 0);
     }
     command_buffer.endRendering();
 
@@ -185,7 +191,75 @@ void Scene::recordCommandBuffer(uint32_t image_index)
 void Scene::processInput()
 {
     if(inputs.count(GLFW_KEY_SPACE) && inputs[GLFW_KEY_SPACE] == InputState::PRESSED){
-        std::cout << "You would have jumped, if there were a jumping feature!" << std::endl;
-        inputs[GLFW_KEY_SPACE] = InputState::RELEASED; // to indicate input ahs been consumed
+        mengerStep();
+        inputs[GLFW_KEY_SPACE] = InputState::RELEASED;
     }
+}
+
+bool isMengerHole(size_t x, size_t y, size_t z) {
+    while (x > 0 || y > 0 || z > 0) {
+        if ((x % 3 == 1 && y % 3 == 1) || 
+            (x % 3 == 1 && z % 3 == 1) || 
+            (y % 3 == 1 && z % 3 == 1)) {
+            return true;
+        }
+        x /= 3; y /= 3; z /= 3;
+    }
+    return false;
+}
+
+void Scene::mengerStep()
+{
+    uint32_t dimension_step = std::pow(3, current_menger_step);
+    cube_size /= 3.0;
+    uint32_t new_cube_tot = std::pow(20, current_menger_step);
+    current_menger_step += 1;
+    float cube_size_dim = cube_size - cube_size * 0.05;
+
+    std::cout << "Step: " << current_menger_step 
+              << " | Grid: " << dimension_step << "x" << dimension_step 
+              << " | Total cubes: " << new_cube_tot
+              << " | Cube Size: " << cube_size << std::endl;
+
+    double start_offset = -4.5 + (cube_size / 2.0);
+    double z_center_world = -10.0;
+    
+    uint32_t index = 0;
+
+    glm::vec3 rot = cubes[0].getRotationVector();
+
+    for(size_t i = 0; i < dimension_step; i++){ // x dimension
+        for(size_t j = 0; j < dimension_step; j++){ // y dimension
+            for(size_t k = 0; k < dimension_step; k++){ // z dimension
+                if(isMengerHole(i, j, k)) {
+                    continue; 
+                }
+                glm::vec3 pos(
+                    start_offset + i * cube_size, 
+                    start_offset + j * cube_size,
+                    -5.5 - (cube_size/2.0) - k * cube_size
+                );
+
+                // Update or Create Cube
+                if(index < current_cubes){
+                    cubes[index].modifyCube(pos, glm::vec3(cube_size_dim));
+                }
+                else{
+                    cubes.push_back(Cube(pos, glm::vec3(cube_size_dim), rot, glm::vec3(0.0), glm::vec3(rot_speed, rot_speed, 0.0f), glm::vec3(0.0), center, false));
+                }
+                index++;
+            }
+        }
+    }
+    if(index != new_cube_tot){
+        std::cout << "ERROR! calculated cubes: " << new_cube_tot << " Actual cubes: " << index << std::endl;
+    }
+    current_cubes = new_cube_tot;
+}
+
+
+void Scene::cleanup(){
+    cubes.clear();
+
+    Engine::cleanup();
 }

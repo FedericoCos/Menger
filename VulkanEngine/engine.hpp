@@ -32,7 +32,7 @@ public:
     void init(const std::string title, uint32_t &w, uint32_t &h);
     
     // Closing functions: cleans the non-raii resources
-    void cleanup();
+    virtual void cleanup();
 
     //loop function
     void run();

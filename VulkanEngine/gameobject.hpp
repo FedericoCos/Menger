@@ -20,38 +20,6 @@ public:
         this -> dis_speed = dis_speed;
         this -> rot_speed = rot_speed;
         this -> scale_speed = scale_speed;
-
-        vertices = {
-            {glm::vec3(-0.5, 0.5, 0.5), glm::vec3(0), glm::vec3(1.0, 0.0, 0.0)},
-            {glm::vec3(0.5, 0.5, 0.5), glm::vec3(0), glm::vec3(0.0, 1.0, 0.0)},
-            {glm::vec3(0.5, -0.5, 0.5), glm::vec3(0), glm::vec3(0.0, 0.0, 1.0)},
-            {glm::vec3(-0.5, -0.5, 0.5), glm::vec3(0), glm::vec3(0.0, 1.0, 0.0)},
-
-            {glm::vec3(-0.5, 0.5, -0.5), glm::vec3(0), glm::vec3(1.0, 0.0, 0.0)},
-            {glm::vec3(0.5, 0.5, -0.5), glm::vec3(0), glm::vec3(0.0, 1.0, 0.0)},
-            {glm::vec3(0.5, -0.5, -0.5), glm::vec3(0), glm::vec3(0.0, 0.0, 1.0)},
-            {glm::vec3(-0.5, -0.5, -0.5), glm::vec3(0), glm::vec3(0.0, 1.0, 0.0)},
-        };
-
-        indices = {
-            0, 1, 2,
-            0, 2, 3,
-
-            1, 5, 6,
-            1, 6, 2,
-
-            5, 4, 7,
-            5, 7, 6,
-
-            4, 0, 3, 
-            4, 3, 7,
-
-            3, 2, 6,
-            3, 6, 7,
-
-            4, 5, 1,
-            4, 1, 0
-        };
     }
 
     ~Gameobject() = default;
@@ -135,7 +103,7 @@ public:
         return index_buffer.buffer;
     }
 
-    const glm::mat4 &getModelMat(){
+    virtual const glm::mat4 &getModelMat(){
         if(dirty_model){
             // Recalculate model matrix when needed
             dirty_model = false;

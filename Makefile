@@ -11,8 +11,8 @@ TARGET = Engine
 
 # Insert shader offline compilation here
 define COMPILE_SHADERS
-glslc Shaders/Samples/vertex.vert -o Shaders/Samples/vertex.vert.spv
-glslc Shaders/Samples/fragment.frag -o Shaders/Samples/fragment.frag.spv
+glslc Shaders/Menger/vertex.vert -o Shaders/Menger/vertex.vert.spv
+glslc Shaders/Menger/fragment.frag -o Shaders/Menger/fragment.frag.spv
 endef
 
 # Default target
@@ -28,12 +28,12 @@ $(TARGET): $(OBJS)
 
 test: $(TARGET)
 	$(COMPILE_SHADERS)
-	./$(TARGET) Engine 1280 720
+	./$(TARGET) Engine 1920 1080
 
 run: CFLAGS += -DNDEBUG
 run: $(TARGET)
 	$(COMPILE_SHADERS)
-	./$(TARGET) Engine 1280 720
+	./$(TARGET) Engine 1920 1080
 
 clean:
 	rm -f $(TARGET) $(OBJS)
