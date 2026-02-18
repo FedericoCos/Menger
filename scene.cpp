@@ -2,11 +2,12 @@
 
 void Scene::createInitResources(){
     // Reserving memory for all cubes, instantiating only for one
-    cube_positions.reserve(MAX_CUBES);
-    cube_positions.push_back(center);
+    cube_positions.resize(MAX_CUBES);
 
     main_cube = Cube(center, glm::vec3(cube_size), glm::vec3(0.0f), glm::vec3(0.0f), rot_speed, glm::vec3(0.0), center, true);
     main_cube.start(vma_allocator, logical_device, queue_pool);
+
+    cube_positions[0] = center;
 
     // The UBO containing the per-cube info
     cube_ssbo_mapped.clear();
@@ -15,12 +16,24 @@ void Scene::createInitResources(){
     for(size_t i = 0; i < queue_pool.max_frames_in_flight; i++){
         cube_ssbo_mapped[i].buffer = Device::createBuffer(
             sizeof(glm::vec4) * MAX_CUBES,
-            vk::BufferUsageFlagBits::eStorageBuffer,
+            vk::BufferUsageFlagBits::eTransferSrc,
             vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-            "Gameobject SSBO",
+            "Gameobject SSBO Mapped",
             vma_allocator
         );
         vmaMapMemory(vma_allocator, cube_ssbo_mapped[i].buffer.allocation, &cube_ssbo_mapped[i].data);
+    }
+
+    cube_ssbo.clear();
+    cube_ssbo.resize(queue_pool.max_frames_in_flight);
+    for(size_t i = 0; i < queue_pool.max_frames_in_flight; i++){
+        cube_ssbo[i].buffer = Device::createBuffer(
+            sizeof(glm::vec4) * MAX_CUBES,
+            vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
+            vk::MemoryPropertyFlagBits::eDeviceLocal,
+            "Gameobject SSBO",
+            vma_allocator
+        );
     }
 
     single_cube_ubo.clear();
@@ -103,7 +116,7 @@ void Scene::createInitResources(){
                                                                         queue_pool.max_frames_in_flight);
     std::vector<void *> resources{
         &ubo_camera_mapped,
-        &cube_ssbo_mapped,
+        &cube_ssbo,
         &single_cube_ubo
     };
     Pipeline::writeDescriptorSets(raster_pipelines[0].descriptor_sets, bindings, resources, logical_device, queue_pool.max_frames_in_flight);
@@ -144,6 +157,8 @@ void Scene::updateUniformBuffers(float dtime, int current_frame)
         }
 
         memcpy(cube_ssbo_mapped[current_frame].data, positions.data(), current_cubes * sizeof(glm::vec4));
+
+        Device::copyBuffer(cube_ssbo_mapped[current_frame].buffer, cube_ssbo[current_frame].buffer, current_cubes * sizeof(glm::vec4), logical_device, queue_pool, 0);
     }
 }
 
@@ -294,6 +309,7 @@ void Scene::cleanup(){
     main_cube = Cube();
     single_cube_ubo.clear();
     cube_ssbo_mapped.clear();
+    cube_ssbo.clear();
 
     Engine::cleanup();
 }

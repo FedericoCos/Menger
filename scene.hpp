@@ -32,6 +32,7 @@ private:
     std::vector<MappedUBO> single_cube_ubo;
     std::vector<glm::vec4> positions;
     std::vector<MappedUBO> cube_ssbo_mapped;
+    std::vector<MappedUBO> cube_ssbo; // They are not actually mapped, I should fix it later but it is to make it work with writeDescriptor
     uint8_t dirty_positions = 0;
 
     // Virtual function from engine

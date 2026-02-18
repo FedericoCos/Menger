@@ -393,7 +393,7 @@ struct MappedUBO{
 
     MappedUBO() = default;
     ~MappedUBO(){
-        if(buffer.allocation && buffer.allocator)
+        if(buffer.allocation && buffer.allocator && data != nullptr)
             vmaUnmapMemory(buffer.allocator, buffer.allocation);
     }
 
