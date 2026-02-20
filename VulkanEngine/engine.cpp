@@ -417,6 +417,7 @@ void Engine::recordCommandBuffer(uint32_t image_index)
 		    vk::AccessFlagBits2::eColorAttachmentWrite,                // dstAccessMask
 		    vk::PipelineStageFlagBits2::eColorAttachmentOutput,        // srcStage
 		    vk::PipelineStageFlagBits2::eColorAttachmentOutput,        // dstStage
+            vk::ImageAspectFlagBits::eColor,
             command_buffer
     );
     vk::ClearValue  clear_color = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f);
@@ -467,6 +468,7 @@ void Engine::recordCommandBuffer(uint32_t image_index)
         {},                                                        // dstAccessMask
         vk::PipelineStageFlagBits2::eColorAttachmentOutput,        // srcStage
         vk::PipelineStageFlagBits2::eBottomOfPipe,                 // dstStage
+        vk::ImageAspectFlagBits::eColor,
         command_buffer
     );
     command_buffer.end();

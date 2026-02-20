@@ -2,9 +2,15 @@
 
 void Scene::createInitResources(){
     original_size = cube_size; // For displacement calculations
+    rot_speed = glm::vec3(0);
+    base_light_intensity = 500000.f;
+    intensity_divisor = 10;
+    light_threshold = 0.1;
 
     // Reserving memory for all cubes, instantiating only for one
     cube_positions.resize(MAX_CUBES);
+    temp_positions.resize(MAX_CUBES);
+    centers_and_levels.resize(MAX_LIGHTS);
 
     main_cube = Cube(center, glm::vec3(cube_size), glm::vec3(0.0f), glm::vec3(0.0f), rot_speed, glm::vec3(0.0), center, true);
     main_cube.start(vma_allocator, logical_device, queue_pool);
@@ -52,6 +58,33 @@ void Scene::createInitResources(){
         vmaMapMemory(vma_allocator, single_cube_ubo[i].buffer.allocation, &single_cube_ubo[i].data);
     }
 
+    // LIGHTS SETUP
+    light_ssbo_mapped.clear();
+    light_ssbo_mapped.resize(queue_pool.max_frames_in_flight);
+    vk::DeviceSize light_size = sizeof(glm::vec4) + sizeof(PointLightBuffer) * MAX_LIGHTS;
+    for(size_t i = 0; i < queue_pool.max_frames_in_flight; i++){
+        light_ssbo_mapped[i].buffer = Device::createBuffer(
+            light_size,
+            vk::BufferUsageFlagBits::eTransferSrc,
+            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+            "Lights SSBO mapped",
+            vma_allocator
+        );
+        vmaMapMemory(vma_allocator, light_ssbo_mapped[i].buffer.allocation, &light_ssbo_mapped[i].data);
+    }
+
+    light_ssbo.clear();
+    light_ssbo.resize(queue_pool.max_frames_in_flight);
+    for(size_t i = 0; i < queue_pool.max_frames_in_flight; i++){
+        light_ssbo[i].buffer = Device::createBuffer(
+            light_size,
+            vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
+            vk::MemoryPropertyFlagBits::eDeviceLocal,
+            "Lights SSBO",
+            vma_allocator
+        );
+    }
+
 
     // CAMERA RESOURCES SETUP
     ubo_camera_mapped.clear();
@@ -77,7 +110,7 @@ void Scene::createInitResources(){
     const std::string fragment_shader_path = "Shaders/Menger/fragment.frag.spv";
 
     std::vector<vk::DescriptorSetLayoutBinding> bindings = {
-        // Binding 0: Camera Uniform Object
+        // Binding 0: Camera Uniform Buffer
         vk::DescriptorSetLayoutBinding(
             0, // binding location
             vk::DescriptorType::eUniformBuffer, // Type of binding
@@ -86,7 +119,7 @@ void Scene::createInitResources(){
             nullptr
         ),
 
-        // Binding 1: GameObject Uniform Buffer
+        // Binding 1: Cubes SSBO
         vk::DescriptorSetLayoutBinding(
             1,
             vk::DescriptorType::eStorageBuffer,
@@ -95,7 +128,7 @@ void Scene::createInitResources(){
             nullptr
         ),
 
-        // Binding 2
+        // Binding 2: main cube uniform buffer
         vk::DescriptorSetLayoutBinding(
             2,
             vk::DescriptorType::eUniformBuffer,
@@ -103,6 +136,16 @@ void Scene::createInitResources(){
             vk::ShaderStageFlagBits::eVertex,
             nullptr
         ),
+
+        // Binding 3: Pointlights SSBO
+        vk::DescriptorSetLayoutBinding(
+            3,
+            vk::DescriptorType::eStorageBuffer,
+            1,
+            vk::ShaderStageFlagBits::eFragment,
+            nullptr
+        ),
+
     };
     std::string name = "dumb pipeline";
     raster_pipelines.push_back(Pipeline::createsRasterPipeline(vertex_shader_path, fragment_shader_path,
@@ -119,7 +162,8 @@ void Scene::createInitResources(){
     std::vector<void *> resources{
         &ubo_camera_mapped,
         &cube_ssbo,
-        &single_cube_ubo
+        &single_cube_ubo,
+        &light_ssbo
     };
     Pipeline::writeDescriptorSets(raster_pipelines[0].descriptor_sets, bindings, resources, logical_device, queue_pool.max_frames_in_flight);
     
@@ -132,7 +176,7 @@ void Scene::updateUniformBuffers(float dtime, int current_frame)
     UniformBufferCamera ubo_camera;
 
     ubo_camera.view = camera.getViewMatrix();
-    ubo_camera.proj = camera.getProjectionMatrix(swapchain.extent.width * 1.f / swapchain.extent.height, 0.1f, 1000.f);
+    ubo_camera.proj = camera.getProjectionMatrix(swapchain.extent.width * 1.f / swapchain.extent.height, n_plane, f_plane);
 
     memcpy(ubo_camera_mapped[current_frame].data, &ubo_camera, sizeof(UniformBufferCamera));
 
@@ -144,23 +188,41 @@ void Scene::updateUniformBuffers(float dtime, int current_frame)
     memcpy(single_cube_ubo[current_frame].data, &first_cube, sizeof(FirstCubeBuffer));
 
     if(dirty_positions < queue_pool.max_frames_in_flight){
+        // Writing cubes
         dirty_positions++;
         if(positions.size() < current_cubes){
             positions.resize(current_cubes);
         }
         positions[0] = glm::vec4(cube_positions[0] - center, 1.0f);
         size_t i = 1;
-        for(; i < current_cubes/2; i++){
+        for(; i < current_cubes; i++){
             positions[i] = glm::vec4(cube_positions[i] - center, 1.0f);
-        }
-        size_t j = i - 1;
-        for(; i < current_cubes; i++, j--){
-            positions[i] = -positions[j];
         }
 
         memcpy(cube_ssbo_mapped[current_frame].data, positions.data(), current_cubes * sizeof(glm::vec4));
 
         Device::copyBuffer(cube_ssbo_mapped[current_frame].buffer, cube_ssbo[current_frame].buffer, current_cubes * sizeof(glm::vec4), logical_device, queue_pool, 0);
+
+        // Writing lights
+        if(pointlight_buffers.size() < current_pointlights){
+            pointlight_buffers.resize(current_pointlights);
+        }
+
+        if(current_pointlights > 0 && current_menger_step < 5){
+            for(i = 0; i < current_pointlights; i++){
+                PointLightBuffer buf;
+                buf.color = glm::vec4(light_colors[centers_and_levels[i].w], base_light_intensity / (centers_and_levels[i].w > 0 ? std::pow(intensity_divisor, centers_and_levels[i].w) : 1));
+                buf.position = glm::vec4(glm::vec3(centers_and_levels[i]), buf.color.w / light_threshold);
+
+                pointlight_buffers[i] = buf;
+            }
+
+            glm::vec4 num(current_pointlights, 0, 0, 0);
+            memcpy(light_ssbo_mapped[current_frame].data, &num, sizeof(glm::vec4));
+            memcpy(static_cast<char*>(light_ssbo_mapped[current_frame].data) + sizeof(glm::vec4), pointlight_buffers.data(), current_pointlights * sizeof(PointLightBuffer));
+
+            Device::copyBuffer(light_ssbo_mapped[current_frame].buffer, light_ssbo[current_frame].buffer, sizeof(glm::vec4) + current_pointlights * sizeof(PointLightBuffer), logical_device, queue_pool, 0);
+        }
     }
 }
 
@@ -176,8 +238,22 @@ void Scene::recordCommandBuffer(uint32_t image_index)
 		    vk::AccessFlagBits2::eColorAttachmentWrite,                // dstAccessMask
 		    vk::PipelineStageFlagBits2::eColorAttachmentOutput,        // srcStage
 		    vk::PipelineStageFlagBits2::eColorAttachmentOutput,        // dstStage
+            vk::ImageAspectFlagBits::eColor,
             command_buffer
     );
+
+    Image::transitionImageLayout(
+        depth_image.image,
+        vk::ImageLayout::eUndefined,
+        vk::ImageLayout::eDepthStencilAttachmentOptimal,
+        {},                                               // srcAccessMask
+        vk::AccessFlagBits2::eDepthStencilAttachmentWrite, // dstAccessMask
+        vk::PipelineStageFlagBits2::eTopOfPipe,            // srcStage
+        vk::PipelineStageFlagBits2::eEarlyFragmentTests,   // dstStage (Where depth starts)
+        vk::ImageAspectFlagBits::eDepth,
+        command_buffer
+    );
+
     vk::ClearValue  clear_color = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f);
 
     vk::RenderingAttachmentInfo attachment_info{};
@@ -235,6 +311,7 @@ void Scene::recordCommandBuffer(uint32_t image_index)
         {},                                                        // dstAccessMask
         vk::PipelineStageFlagBits2::eColorAttachmentOutput,        // srcStage
         vk::PipelineStageFlagBits2::eBottomOfPipe,                 // dstStage
+        vk::ImageAspectFlagBits::eColor,
         command_buffer
     );
     command_buffer.end();
@@ -264,18 +341,6 @@ void Scene::processInput()
     }
 }
 
-bool isMengerHole(size_t x, size_t y, size_t z) {
-    while (x > 0 || y > 0 || z > 0) {
-        if ((x % 3 == 1 && y % 3 == 1) || 
-            (x % 3 == 1 && z % 3 == 1) || 
-            (y % 3 == 1 && z % 3 == 1)) {
-            return true;
-        }
-        x /= 3; y /= 3; z /= 3;
-    }
-    return false;
-}
-
 void Scene::mengerStep()
 {
     dirty_positions = 0;
@@ -294,36 +359,44 @@ void Scene::mengerStep()
     
     uint32_t index = 0;
 
-    for(size_t i = 0; i < dimension_step; i++){ // x dimension
-        for(size_t j = 0; j < dimension_step; j++){ // y dimension
-            for(size_t k = 0; k < dimension_step; k++){ // z dimension
-                if(isMengerHole(i, j, k)) {
-                    continue; 
+    std::copy_n(cube_positions.begin(), current_cubes, temp_positions.begin());
+
+    for(size_t cube_ind = 0; cube_ind < current_cubes; cube_ind++){
+        glm::vec3 &pos = temp_positions[cube_ind];
+        for(size_t i = 0; i < 3; i++){ // x dimension
+            for(size_t j = 0; j < 3; j++){ // y dimension
+                for(size_t k = 0; k < 3; k++){ // z dimension
+                    // Skipping empty cubes
+                    if ((i == 1 && j == 1) || 
+                        (i == 1 && k == 1) || 
+                        (j == 1 && k == 1)){
+                        if(i == 1 && j == 1 && k == 1){
+                            centers_and_levels[current_pointlights] = glm::vec4(
+                                pos.x + i * cube_size - cube_size,
+                                pos.y + j * cube_size - cube_size,
+                                pos.z + k * cube_size - cube_size,
+                                current_menger_step - 2 // This is needed to extract the correct color for the light
+                            );
+                            current_pointlights++;
+                        }
+
+                        continue;
+                    }
+
+                    glm::vec3 new_pos(
+                        pos.x + i * cube_size - cube_size,
+                        pos.y + j * cube_size - cube_size,
+                        pos.z + k * cube_size - cube_size
+                    );
+
+                    cube_positions[index] = new_pos;
+                    index++;
                 }
-
-                /* bool solid_right = (i + 1 < dimension_step) && !isMengerHole(i + 1, j, k);
-                bool solid_left  = (i > 0)                  && !isMengerHole(i - 1, j, k);
-                
-                bool solid_up    = (j + 1 < dimension_step) && !isMengerHole(i, j + 1, k);
-                bool solid_down  = (j > 0)                  && !isMengerHole(i, j - 1, k);
-                
-                bool solid_front = (k + 1 < dimension_step) && !isMengerHole(i, j, k + 1);
-                bool solid_back  = (k > 0)                  && !isMengerHole(i, j, k - 1);
-
-                if(solid_right && solid_left && solid_up && solid_down && solid_front && solid_back){
-                    continue;
-                } */
-                glm::vec3 pos(
-                    start_offset + i * cube_size, 
-                    start_offset + j * cube_size,
-                    (center.z + original_size/2) - (cube_size/2.0) - k * cube_size
-                );
-
-                cube_positions[index] = pos;
-                index++;
             }
         }
     }
+
+
     if(index != new_cube_tot){
         std::cout << "ERROR! calculated cubes: " << new_cube_tot << " Actual cubes: " << index << std::endl;
     }
@@ -337,6 +410,8 @@ void Scene::cleanup(){
     single_cube_ubo.clear();
     cube_ssbo_mapped.clear();
     cube_ssbo.clear();
+    light_ssbo_mapped.clear();
+    light_ssbo.clear();
 
     Engine::cleanup();
 }

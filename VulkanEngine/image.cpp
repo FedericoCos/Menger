@@ -111,7 +111,7 @@ vk::Format Image::findDepthFormat(vk::raii::PhysicalDevice &physical_device)
 }
 
 void Image::transitionImageLayout(vk::Image &image, vk::ImageLayout old_layout, vk::ImageLayout new_layout, vk::AccessFlags2 src_access_mask, vk::AccessFlags2 dst_access_mask, vk::PipelineStageFlags2 src_stage_mask, vk::PipelineStageFlags2 dst_stage_mask,
-                                    vk::raii::CommandBuffer &command_buffer)
+                                    vk::ImageAspectFlagBits image_aspect, vk::raii::CommandBuffer &command_buffer)
 {
     vk::ImageMemoryBarrier2 barrier{};
     barrier.srcStageMask = src_stage_mask;
@@ -125,7 +125,7 @@ void Image::transitionImageLayout(vk::Image &image, vk::ImageLayout old_layout, 
     barrier.image = image;
 
     // TODO - FIX THIS FOR MULTISAMPLING
-    barrier.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
+    barrier.subresourceRange.aspectMask = image_aspect;
     barrier.subresourceRange.baseMipLevel = 0;
     barrier.subresourceRange.levelCount = 1;
     barrier.subresourceRange.baseArrayLayer = 0;

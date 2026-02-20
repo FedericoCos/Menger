@@ -25,6 +25,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/rotate_vector.hpp>
+#include <glm/ext.hpp>
 
 #include "vk_mem_alloc.h"
 

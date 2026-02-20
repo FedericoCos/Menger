@@ -29,6 +29,7 @@ namespace Image{
 	    vk::AccessFlags2        dst_access_mask,
 	    vk::PipelineStageFlags2 src_stage_mask,
 	    vk::PipelineStageFlags2 dst_stage_mask,
+            vk::ImageAspectFlagBits image_aspect,
             vk::raii::CommandBuffer &command_buffer
         );
 
