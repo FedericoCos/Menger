@@ -24,6 +24,8 @@ layout(binding = 2) uniform UniformBufferCube{
     vec4 center_and_scale;
 }cube_ubo;
 
+layout(location = 13) flat out int instance_id;
+
 void main(){
     vec3 pos = inPosition * cube_ubo.center_and_scale.w;
     pos += obj_buffer.positions[gl_InstanceIndex].xyz;
@@ -36,4 +38,6 @@ void main(){
     fragPos = pos;
     fragNorm = rotate_matrix * inNormal;
     fragColor = inColor;
+
+    instance_id = gl_InstanceIndex;
 }

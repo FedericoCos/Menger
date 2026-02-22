@@ -47,21 +47,37 @@ private:
     float f_plane = 10000.f;
 
     // Variables related to light
-    const uint32_t MAX_LIGHTS = 3368421;
+    uint32_t MAX_LIGHTS = 168421; // 3368421 for level 6 of menger sponge, 168421 for level 5
     std::vector<glm::vec4> centers_and_levels;
     uint32_t current_pointlights = 0;
+    uint32_t current_connections = 0;
     std::vector<MappedUBO> light_ssbo_mapped;
     std::vector<MappedUBO> light_ssbo;
     std::vector<PointLightBuffer> pointlight_buffers;
     float base_light_intensity = 100000.f;
     uint16_t intensity_divisor = 10;
     float light_threshold = 0.01;
-    std::array<glm::vec3, 3> light_colors = {
-        glm::vec3(1.0, 0.65, 0.0),
-        glm::vec3(0.55, 0.31, 0.08),
-        glm::vec3(0.06, 0.06, 0.1)
+    uint8_t max_menger_step_lights = 5;
+    std::array<glm::vec3, 5> light_colors = {
+        glm::vec3(1.0f, 0.65f, 0.0f), 
+        
+        glm::vec3(0.75f, 0.45f, 0.05f), 
+        
+        glm::vec3(0.55f, 0.31f, 0.08f), 
+        
+        glm::vec3(0.15f, 0.10f, 0.20f), 
+        
+        glm::vec3(0.02f, 0.02f, 0.05f)  
     };
 
+    // Variables for the simil deferred shading
+    std::vector<uint16_t> light_indices; // This will connect each cube to only the lights it can see, a simil deferred shading
+    std::vector<uint32_t> light_indices_size; // Indicates how many lights per specific cube
+    std::vector<MappedUBO> light_indices_ssbo;
+    std::vector<MappedUBO> light_indices_ssbo_mapped;
+    std::vector<MappedUBO> light_indices_size_ssbo;
+    std::vector<MappedUBO> light_indices_size_ssbo_mapped;
+    uint32_t MAX_CONNECTIONS = 50;
 
 
     // Virtual function from engine
@@ -72,4 +88,7 @@ private:
 
     // Function that splits and calculates new cubes
     void mengerStep();
+
+    // This function takes all the cubes, all the lights, and connects them
+    void connectLights();
 };

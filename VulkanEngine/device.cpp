@@ -16,6 +16,7 @@ std::vector<const char *> device_extensions = {
     vk::KHRSpirv14ExtensionName,
     vk::KHRSynchronization2ExtensionName,
     vk::KHRCreateRenderpass2ExtensionName,
+
 };
 
 vk::raii::PhysicalDevice Device::pickPhysicalDevice(const vk::raii::Instance &instance){
@@ -65,6 +66,11 @@ vk::raii::Device Device::createLogicalDevice(const vk::raii::PhysicalDevice &phy
     // Enabling all required features
     vk::PhysicalDeviceFeatures2 deviceFeatures2 = {};
     deviceFeatures2.features.sampleRateShading = vk::True;
+    deviceFeatures2.features.shaderInt16 = vk::True;
+
+    vk::PhysicalDeviceVulkan11Features vulkan11features;
+    vulkan11features.storageBuffer16BitAccess = vk::True;
+    vulkan11features.uniformAndStorageBuffer16BitAccess = vk::True;
 
     vk::PhysicalDeviceVulkan12Features vulkan12features;
     vulkan12features.bufferDeviceAddress = true; // Memory can be referenced by a pointer rather than just a descriptor set
@@ -77,11 +83,13 @@ vk::raii::Device Device::createLogicalDevice(const vk::raii::PhysicalDevice &phy
 
     vk::StructureChain<
         vk::PhysicalDeviceFeatures2,
+        vk::PhysicalDeviceVulkan11Features,
         vk::PhysicalDeviceVulkan12Features, 
         vk::PhysicalDeviceVulkan13Features,
         vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT
     > feature_chain{
         deviceFeatures2,
+        vulkan11features,
         vulkan12features,
         vulkan13features,
         vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT{ VK_TRUE }

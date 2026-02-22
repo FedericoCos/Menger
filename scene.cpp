@@ -6,11 +6,15 @@ void Scene::createInitResources(){
     base_light_intensity = 500000.f;
     intensity_divisor = 10;
     light_threshold = 0.1;
+    MAX_CONNECTIONS = 100000000;
+    max_menger_step_lights = 7;
 
     // Reserving memory for all cubes, instantiating only for one
     cube_positions.resize(MAX_CUBES);
     temp_positions.resize(MAX_CUBES);
     centers_and_levels.resize(MAX_LIGHTS);
+    light_indices_size.resize(MAX_CUBES + 1);
+    light_indices.resize(MAX_CONNECTIONS * MAX_CUBES);
 
     main_cube = Cube(center, glm::vec3(cube_size), glm::vec3(0.0f), glm::vec3(0.0f), rot_speed, glm::vec3(0.0), center, true);
     main_cube.start(vma_allocator, logical_device, queue_pool);
@@ -85,6 +89,61 @@ void Scene::createInitResources(){
         );
     }
 
+    // Simil deferred shading setup
+    light_indices_ssbo_mapped.clear();
+    light_indices_ssbo_mapped.resize(queue_pool.max_frames_in_flight);
+    vk::DeviceSize light_indices_device_size = sizeof(uint16_t) * (MAX_CONNECTIONS * MAX_CUBES);
+    for(size_t i = 0; i < queue_pool.max_frames_in_flight; i++){
+        light_indices_ssbo_mapped[i].buffer = Device::createBuffer(
+            light_indices_device_size,
+            vk::BufferUsageFlagBits::eTransferSrc,
+            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+            "Lights indices SSBO mapped",
+            vma_allocator
+        );
+        vmaMapMemory(vma_allocator, light_indices_ssbo_mapped[i].buffer.allocation, &light_indices_ssbo_mapped[i].data);
+    }
+
+    light_indices_ssbo.clear();
+    light_indices_ssbo.resize(queue_pool.max_frames_in_flight);
+    for(size_t i = 0; i < queue_pool.max_frames_in_flight; i++){
+        light_indices_ssbo[i].buffer = Device::createBuffer(
+            light_indices_device_size,
+            vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
+            vk::MemoryPropertyFlagBits::eDeviceLocal,
+            "Lights indices SSBO",
+            vma_allocator
+        );
+    }
+
+
+    light_indices_size_ssbo_mapped.clear();
+    light_indices_size_ssbo_mapped.resize(queue_pool.max_frames_in_flight);
+    vk::DeviceSize light_indices_size_device_size = sizeof(uint32_t) * (MAX_CUBES + 1);
+    for(size_t i = 0; i < queue_pool.max_frames_in_flight; i++){
+        light_indices_size_ssbo_mapped[i].buffer = Device::createBuffer(
+            light_indices_size_device_size,
+            vk::BufferUsageFlagBits::eTransferSrc,
+            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+            "Lights indices size SSBO mapped",
+            vma_allocator
+        );
+        vmaMapMemory(vma_allocator, light_indices_size_ssbo_mapped[i].buffer.allocation, &light_indices_size_ssbo_mapped[i].data);
+    }
+
+    light_indices_size_ssbo.clear();
+    light_indices_size_ssbo.resize(queue_pool.max_frames_in_flight);
+    for(size_t i = 0; i < queue_pool.max_frames_in_flight; i++){
+        light_indices_size_ssbo[i].buffer = Device::createBuffer(
+            light_indices_size_device_size,
+            vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
+            vk::MemoryPropertyFlagBits::eDeviceLocal,
+            "Lights indices size SSBO",
+            vma_allocator
+        );
+    }
+
+
 
     // CAMERA RESOURCES SETUP
     ubo_camera_mapped.clear();
@@ -146,6 +205,24 @@ void Scene::createInitResources(){
             nullptr
         ),
 
+        // Binding 4: Pointlights indices SSBO
+        vk::DescriptorSetLayoutBinding(
+            4,
+            vk::DescriptorType::eStorageBuffer,
+            1,
+            vk::ShaderStageFlagBits::eFragment,
+            nullptr
+        ),
+
+        // Binding 5: Pointlights indices size SSBO
+        vk::DescriptorSetLayoutBinding(
+            5,
+            vk::DescriptorType::eStorageBuffer,
+            1,
+            vk::ShaderStageFlagBits::eFragment,
+            nullptr
+        ),
+
     };
     std::string name = "dumb pipeline";
     raster_pipelines.push_back(Pipeline::createsRasterPipeline(vertex_shader_path, fragment_shader_path,
@@ -163,12 +240,16 @@ void Scene::createInitResources(){
         &ubo_camera_mapped,
         &cube_ssbo,
         &single_cube_ubo,
-        &light_ssbo
+        &light_ssbo,
+        &light_indices_ssbo,
+        &light_indices_size_ssbo
     };
     Pipeline::writeDescriptorSets(raster_pipelines[0].descriptor_sets, bindings, resources, logical_device, queue_pool.max_frames_in_flight);
     
     pip_to_obj[&raster_pipelines[0]] = std::vector<Gameobject*>();
     pip_to_obj[&raster_pipelines[0]].push_back(&main_cube);
+
+    mengerStep();
 }
 
 void Scene::updateUniformBuffers(float dtime, int current_frame)
@@ -208,7 +289,7 @@ void Scene::updateUniformBuffers(float dtime, int current_frame)
             pointlight_buffers.resize(current_pointlights);
         }
 
-        if(current_pointlights > 0 && current_menger_step < 5){
+        if(current_pointlights > 0 && current_menger_step < max_menger_step_lights){
             for(i = 0; i < current_pointlights; i++){
                 PointLightBuffer buf;
                 buf.color = glm::vec4(light_colors[centers_and_levels[i].w], base_light_intensity / (centers_and_levels[i].w > 0 ? std::pow(intensity_divisor, centers_and_levels[i].w) : 1));
@@ -222,6 +303,14 @@ void Scene::updateUniformBuffers(float dtime, int current_frame)
             memcpy(static_cast<char*>(light_ssbo_mapped[current_frame].data) + sizeof(glm::vec4), pointlight_buffers.data(), current_pointlights * sizeof(PointLightBuffer));
 
             Device::copyBuffer(light_ssbo_mapped[current_frame].buffer, light_ssbo[current_frame].buffer, sizeof(glm::vec4) + current_pointlights * sizeof(PointLightBuffer), logical_device, queue_pool, 0);
+        }
+
+        if(current_pointlights > 0){
+            memcpy(light_indices_size_ssbo_mapped[current_frame].data, light_indices_size.data(), sizeof(uint32_t) * (current_cubes + 1));
+            Device::copyBuffer(light_indices_size_ssbo_mapped[current_frame].buffer, light_indices_size_ssbo[current_frame].buffer, sizeof(uint32_t) * (current_cubes + 1), logical_device, queue_pool, 0);
+
+            memcpy(light_indices_ssbo_mapped[current_frame].data, light_indices.data(), sizeof(uint16_t) * (current_cubes * current_pointlights));
+            Device::copyBuffer(light_indices_ssbo_mapped[current_frame].buffer, light_indices_ssbo[current_frame].buffer, sizeof(uint16_t) * (current_connections), logical_device, queue_pool, 0);
         }
     }
 }
@@ -370,13 +459,14 @@ void Scene::mengerStep()
                     if ((i == 1 && j == 1) || 
                         (i == 1 && k == 1) || 
                         (j == 1 && k == 1)){
-                        if(i == 1 && j == 1 && k == 1){
+                        if(i == 1 && j == 1 && k == 1 && current_pointlights < MAX_LIGHTS){
                             centers_and_levels[current_pointlights] = glm::vec4(
                                 pos.x + i * cube_size - cube_size,
                                 pos.y + j * cube_size - cube_size,
                                 pos.z + k * cube_size - cube_size,
                                 current_menger_step - 2 // This is needed to extract the correct color for the light
                             );
+
                             current_pointlights++;
                         }
 
@@ -402,8 +492,44 @@ void Scene::mengerStep()
     }
     main_cube.modifyCube(glm::vec3(start_offset, start_offset, -5.5 - (cube_size/2.0)), glm::vec3(cube_size_dim));
     current_cubes = index;
+
+    connectLights();
 }
 
+void Scene::connectLights()
+{
+    uint32_t count = 0;
+    uint16_t cubes = 0;
+    uint16_t max_temp = 0;
+
+    for(size_t i = 0; i < current_cubes; i++){
+        light_indices_size[i] = count;
+        uint16_t temp = 0;
+
+        for(size_t j = 0; j < current_pointlights; j++){
+            float intensity = base_light_intensity / (centers_and_levels[j].w > 0 ? std::pow(intensity_divisor, centers_and_levels[j].w) : 1);
+            
+            float radius_sq = intensity / light_threshold;
+
+            glm::vec3 diff = cube_positions[i] - glm::vec3(centers_and_levels[j]);
+            float dist_sq = glm::dot(diff, diff);
+
+            if(dist_sq <= radius_sq){
+                light_indices[count] = j;
+                count++;
+                temp++;
+            }
+        }
+
+        if(max_temp < temp) {
+            max_temp = temp;
+        }
+    }
+
+    light_indices_size[current_cubes] = count;
+    current_connections = count;
+    std::cout << max_temp << std::endl;
+}
 
 void Scene::cleanup(){
     main_cube = Cube();
