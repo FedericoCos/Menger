@@ -318,6 +318,19 @@ void Engine::run(){
 
 void Engine::drawFrame()
 {
+    if (target_fps > 0) {
+        float target_ms = 1000.0f / target_fps;
+        auto current_time = std::chrono::high_resolution_clock::now();
+        
+        // Calculate how much time has passed since the last frame
+        float elapsed = std::chrono::duration<float, std::milli>(current_time - prev_time).count();
+        
+        // If we are rendering faster than our target, put the thread to sleep
+        if (elapsed < target_ms) {
+            std::this_thread::sleep_for(std::chrono::duration<float, std::milli>(target_ms - elapsed));
+        }
+    }
+    
     // CPU block
     while(vk::Result::eTimeout == logical_device.waitForFences(*in_flight_fences[current_frame], vk::True, UINT64_MAX));
 

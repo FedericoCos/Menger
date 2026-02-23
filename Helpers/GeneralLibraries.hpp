@@ -17,6 +17,7 @@
 #include <map>
 #include <chrono>
 #include <deque>
+#include <thread>
 
 #include <vulkan/vulkan_raii.hpp>
 
@@ -374,7 +375,14 @@ enum class CameraMovement{
     LEFT,
     RIGHT,
     UP,
-    DOWN
+    DOWN,
+
+    T_LEFT,
+    T_RIGHT,
+    T_UP,
+    T_DOWN,
+    T_ROLL_LEFT,
+    T_ROLL_RIGHT
 };
 
 // Uniform Buffer object for View and Prokection matrix from camera

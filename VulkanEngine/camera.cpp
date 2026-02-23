@@ -12,7 +12,7 @@ glm::mat4 Camera::getProjectionMatrix(float aspect_ratio, float near_plane, floa
 
 void Camera::processKeyboard(CameraMovement direction, float dtime)
 {
-    float velocity = movement_speed * dtime;
+    float velocity = max_speed * dtime;
 
     switch (direction) {
         case CameraMovement::FORWARD:
@@ -64,7 +64,6 @@ void Camera::updateCameraVectors()
     front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
 
     front = glm::normalize(front);
-
     right = glm::normalize(glm::cross(front, world_up));
     up = glm::normalize(glm::cross(right, front));
 }

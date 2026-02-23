@@ -33,13 +33,17 @@ layout(std430, binding = 5) readonly buffer LightIndicesSizeSSBO {
 layout(location = 0) out vec4 outColor;
 
 // Light info
-vec3 ambient = vec3(0.1, 0.1, 0.1);
-vec3 light_pos = vec3(10, 10, 10);
-vec3 light_col = vec3(0.4);
+vec3 ambient = vec3(0.01, 0.02, 0.05);
+
+vec3 sun_dir = normalize(vec3(0.2, 1.0, 0.4)); 
+vec3 sun_col = vec3(0.04, 0.12, 0.20); // Dim, scattered teal water-light
 
 void main(){
     vec3 norm = normalize(fragNorm);
     vec3 total_diffuse = vec3(0.0);
+
+    float sun_diff_coeff = max(dot(norm, sun_dir), 0.0);
+    total_diffuse += sun_diff_coeff * sun_col;
 
     for(uint i = light_indices_size.indices[instance_id]; i < light_indices_size.indices[instance_id + 1]; i++){
         uint light_index = light_indices.indices[i];

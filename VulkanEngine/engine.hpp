@@ -86,6 +86,7 @@ protected:
     // FPS tracker components
     float time = 0.0;
     std::chrono::_V2::system_clock::time_point prev_time; 
+    uint32_t target_fps = 0;
 
     // Camera components
     Camera camera;

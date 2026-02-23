@@ -2,6 +2,7 @@
 
 #include "VulkanEngine/engine.hpp"
 #include "cube.hpp"
+#include "cinematicCamera.hpp"
 
 struct CubeBuffer{
     glm::vec4 position;
@@ -43,6 +44,7 @@ private:
     uint8_t dirty_positions = 0;
 
     // Variables related to camera
+    C_camera c_camera;
     float n_plane = 0.1f;
     float f_plane = 10000.f;
 
@@ -59,15 +61,12 @@ private:
     float light_threshold = 0.01;
     uint8_t max_menger_step_lights = 5;
     std::array<glm::vec3, 5> light_colors = {
-        glm::vec3(1.0f, 0.65f, 0.0f), 
-        
-        glm::vec3(0.75f, 0.45f, 0.05f), 
-        
-        glm::vec3(0.55f, 0.31f, 0.08f), 
-        
-        glm::vec3(0.15f, 0.10f, 0.20f), 
-        
-        glm::vec3(1.f, 0.02f, 0.05f)  
+        glm::vec3(0.00f, 0.10f, 0.50f), // Level 0: Deep marine blue
+        glm::vec3(0.00f, 0.50f, 0.80f), // Level 1: Ocean cyan
+        glm::vec3(0.00f, 0.85f, 0.60f), // Level 2: Mint/Teal
+        glm::vec3(0.40f, 0.95f, 0.20f), // Level 3: Bioluminescent lime
+        glm::vec3(0.80f, 1.00f, 0.60f)  // Level 4: Pale yellow-green
+        // glm::vec3(1.0f, 1.0f, 0.9f)  // Level 5: Soft white
     };
 
     // Variables for the simil deferred shading

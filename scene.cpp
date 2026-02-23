@@ -1,6 +1,8 @@
 #include "scene.hpp"
 
 void Scene::createInitResources(){
+    target_fps = 30;
+
     original_size = cube_size; // For displacement calculations
     rot_speed = glm::vec3(0);
     base_light_intensity = 500000.f;
@@ -161,7 +163,7 @@ void Scene::createInitResources(){
         vmaMapMemory(vma_allocator, ubo_camera_mapped[i].buffer.allocation, &ubo_camera_mapped[i].data);
     }
 
-    camera = Camera(glm::vec3(0, 0, 2), 0.1f);
+    c_camera = C_camera(glm::vec3(0, 0, 2), 0.3f, 0.01f, 0.001f, 0.05f);
 
 
 
@@ -254,10 +256,12 @@ void Scene::createInitResources(){
 
 void Scene::updateUniformBuffers(float dtime, int current_frame)
 {
+    c_camera.update(dtime);
+
     UniformBufferCamera ubo_camera;
 
-    ubo_camera.view = camera.getViewMatrix();
-    ubo_camera.proj = camera.getProjectionMatrix(swapchain.extent.width * 1.f / swapchain.extent.height, n_plane, f_plane);
+    ubo_camera.view = c_camera.getViewMatrix();
+    ubo_camera.proj = c_camera.getProjectionMatrix(swapchain.extent.width * 1.f / swapchain.extent.height, n_plane, f_plane);
 
     memcpy(ubo_camera_mapped[current_frame].data, &ubo_camera, sizeof(UniformBufferCamera));
 
@@ -417,16 +421,35 @@ void Scene::processInput()
     }
 
     if(inputs.count(GLFW_KEY_W) && (inputs[GLFW_KEY_W] == InputState::PRESSED || inputs[GLFW_KEY_W] == InputState::HOLD)){
-        camera.processKeyboard(CameraMovement::FORWARD, time);
+        c_camera.processKeyboard(CameraMovement::FORWARD, time);
     }
     if(inputs.count(GLFW_KEY_S) && (inputs[GLFW_KEY_S] == InputState::PRESSED || inputs[GLFW_KEY_S] == InputState::HOLD)){
-        camera.processKeyboard(CameraMovement::BACKWARD, time);
+        c_camera.processKeyboard(CameraMovement::BACKWARD, time);
     }
     if(inputs.count(GLFW_KEY_A) && (inputs[GLFW_KEY_A] == InputState::PRESSED || inputs[GLFW_KEY_A] == InputState::HOLD)){
-        camera.processKeyboard(CameraMovement::LEFT, time);
+        c_camera.processKeyboard(CameraMovement::LEFT, time);
     }
     if(inputs.count(GLFW_KEY_D) && (inputs[GLFW_KEY_D] == InputState::PRESSED || inputs[GLFW_KEY_D] == InputState::HOLD)){
-        camera.processKeyboard(CameraMovement::RIGHT, time);
+        c_camera.processKeyboard(CameraMovement::RIGHT, time);
+    }
+
+    if(inputs.count(GLFW_KEY_UP) && (inputs[GLFW_KEY_UP] == InputState::PRESSED || inputs[GLFW_KEY_UP] == InputState::HOLD)){
+        c_camera.processKeyboard(CameraMovement::T_UP, time);
+    }
+    if(inputs.count(GLFW_KEY_DOWN) && (inputs[GLFW_KEY_DOWN] == InputState::PRESSED || inputs[GLFW_KEY_DOWN] == InputState::HOLD)){
+        c_camera.processKeyboard(CameraMovement::T_DOWN, time);
+    }
+    if(inputs.count(GLFW_KEY_RIGHT) && (inputs[GLFW_KEY_RIGHT] == InputState::PRESSED || inputs[GLFW_KEY_RIGHT] == InputState::HOLD)){
+        c_camera.processKeyboard(CameraMovement::T_RIGHT, time);
+    }
+    if(inputs.count(GLFW_KEY_LEFT) && (inputs[GLFW_KEY_LEFT] == InputState::PRESSED || inputs[GLFW_KEY_LEFT] == InputState::HOLD)){
+        c_camera.processKeyboard(CameraMovement::T_LEFT, time);
+    }
+    if(inputs.count(GLFW_KEY_RIGHT_SHIFT) && (inputs[GLFW_KEY_RIGHT_SHIFT] == InputState::PRESSED || inputs[GLFW_KEY_RIGHT_SHIFT] == InputState::HOLD)){
+        c_camera.processKeyboard(CameraMovement::T_ROLL_RIGHT, time);
+    }
+    if(inputs.count(GLFW_KEY_LEFT_SHIFT) && (inputs[GLFW_KEY_LEFT_SHIFT] == InputState::PRESSED || inputs[GLFW_KEY_LEFT_SHIFT] == InputState::HOLD)){
+        c_camera.processKeyboard(CameraMovement::T_ROLL_LEFT, time);
     }
 }
 
