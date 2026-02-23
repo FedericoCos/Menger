@@ -26,7 +26,7 @@ public:
 
 private:
     // Varibales related to cube
-    const uint32_t MAX_CUBES = 64000000;
+    const uint32_t MAX_CUBES = 3200000;
     uint32_t current_cubes = 1;
     uint32_t current_menger_step = 1;
     double cube_size = 2187.0;
@@ -67,11 +67,11 @@ private:
         
         glm::vec3(0.15f, 0.10f, 0.20f), 
         
-        glm::vec3(0.02f, 0.02f, 0.05f)  
+        glm::vec3(1.f, 0.02f, 0.05f)  
     };
 
     // Variables for the simil deferred shading
-    std::vector<uint16_t> light_indices; // This will connect each cube to only the lights it can see, a simil deferred shading
+    std::vector<uint32_t> light_indices; // This will connect each cube to only the lights it can see, a simil deferred shading
     std::vector<uint32_t> light_indices_size; // Indicates how many lights per specific cube
     std::vector<MappedUBO> light_indices_ssbo;
     std::vector<MappedUBO> light_indices_ssbo_mapped;

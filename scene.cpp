@@ -4,9 +4,9 @@ void Scene::createInitResources(){
     original_size = cube_size; // For displacement calculations
     rot_speed = glm::vec3(0);
     base_light_intensity = 500000.f;
-    intensity_divisor = 10;
+    intensity_divisor = 9;
     light_threshold = 0.1;
-    MAX_CONNECTIONS = 100000000;
+    MAX_CONNECTIONS = 100;
     max_menger_step_lights = 7;
 
     // Reserving memory for all cubes, instantiating only for one
@@ -92,7 +92,7 @@ void Scene::createInitResources(){
     // Simil deferred shading setup
     light_indices_ssbo_mapped.clear();
     light_indices_ssbo_mapped.resize(queue_pool.max_frames_in_flight);
-    vk::DeviceSize light_indices_device_size = sizeof(uint16_t) * (MAX_CONNECTIONS * MAX_CUBES);
+    vk::DeviceSize light_indices_device_size = sizeof(uint32_t) * (MAX_CONNECTIONS * MAX_CUBES);
     for(size_t i = 0; i < queue_pool.max_frames_in_flight; i++){
         light_indices_ssbo_mapped[i].buffer = Device::createBuffer(
             light_indices_device_size,
@@ -309,8 +309,8 @@ void Scene::updateUniformBuffers(float dtime, int current_frame)
             memcpy(light_indices_size_ssbo_mapped[current_frame].data, light_indices_size.data(), sizeof(uint32_t) * (current_cubes + 1));
             Device::copyBuffer(light_indices_size_ssbo_mapped[current_frame].buffer, light_indices_size_ssbo[current_frame].buffer, sizeof(uint32_t) * (current_cubes + 1), logical_device, queue_pool, 0);
 
-            memcpy(light_indices_ssbo_mapped[current_frame].data, light_indices.data(), sizeof(uint16_t) * (current_cubes * current_pointlights));
-            Device::copyBuffer(light_indices_ssbo_mapped[current_frame].buffer, light_indices_ssbo[current_frame].buffer, sizeof(uint16_t) * (current_connections), logical_device, queue_pool, 0);
+            memcpy(light_indices_ssbo_mapped[current_frame].data, light_indices.data(), sizeof(uint32_t) * (current_connections));
+            Device::copyBuffer(light_indices_ssbo_mapped[current_frame].buffer, light_indices_ssbo[current_frame].buffer, sizeof(uint32_t) * (current_connections), logical_device, queue_pool, 0);
         }
     }
 }
@@ -437,7 +437,7 @@ void Scene::mengerStep()
     cube_size /= 3.0;
     uint32_t new_cube_tot = std::pow(20, current_menger_step);
     current_menger_step += 1;
-    float cube_size_dim = cube_size - cube_size * 0.05;
+    float cube_size_dim = cube_size - cube_size * 0.1;
 
     std::cout << "Step: " << current_menger_step
               << " | Grid: " << dimension_step << "x" << dimension_step 
@@ -498,37 +498,48 @@ void Scene::mengerStep()
 
 void Scene::connectLights()
 {
-    uint32_t count = 0;
-    uint16_t cubes = 0;
-    uint16_t max_temp = 0;
+    std::vector<float> precomputed_radius(current_pointlights);
+    for(size_t j = 0; j < current_pointlights; j++){
+        float intensity = base_light_intensity / (centers_and_levels[j].w > 0 ? std::pow(intensity_divisor, centers_and_levels[j].w) : 1.0f);
+        precomputed_radius[j] = std::sqrt(intensity / light_threshold);
+    }
 
+    float cube_bounding_radius = 1.73205f * (cube_size / 2.0f);
+
+    #pragma omp parallel for
     for(size_t i = 0; i < current_cubes; i++){
-        light_indices_size[i] = count;
-        uint16_t temp = 0;
+        uint16_t count = 0;
+        glm::vec3 current_cube_pos = cube_positions[i]; 
 
-        for(size_t j = 0; j < current_pointlights; j++){
-            float intensity = base_light_intensity / (centers_and_levels[j].w > 0 ? std::pow(intensity_divisor, centers_and_levels[j].w) : 1);
-            
-            float radius_sq = intensity / light_threshold;
+        for(int j = current_pointlights - 1; j >= 0; j--){
+            glm::vec3 diff = current_cube_pos - glm::vec3(centers_and_levels[j]);
+            float dist = glm::length(diff);
 
-            glm::vec3 diff = cube_positions[i] - glm::vec3(centers_and_levels[j]);
-            float dist_sq = glm::dot(diff, diff);
-
-            if(dist_sq <= radius_sq){
-                light_indices[count] = j;
+            if(dist - cube_bounding_radius <= precomputed_radius[j] && count < MAX_CONNECTIONS){
+                light_indices[count + (i * MAX_CONNECTIONS)] = j;
                 count++;
-                temp++;
             }
         }
+        light_indices_size[i] = count;
+    }
 
-        if(max_temp < temp) {
-            max_temp = temp;
+    size_t current_ind = 0;
+    
+    for(size_t i = 0; i < current_cubes; i++){
+        size_t temp_count = light_indices_size[i];
+        
+        light_indices_size[i] = current_ind; 
+
+        size_t start_ind = i * MAX_CONNECTIONS;
+
+        for(size_t j = start_ind; j < start_ind + temp_count; j++){
+            light_indices[current_ind] = light_indices[j];
+            current_ind++;
         }
     }
 
-    light_indices_size[current_cubes] = count;
-    current_connections = count;
-    std::cout << max_temp << std::endl;
+    light_indices_size[current_cubes] = current_ind;
+    current_connections = current_ind;
 }
 
 void Scene::cleanup(){
@@ -538,6 +549,11 @@ void Scene::cleanup(){
     cube_ssbo.clear();
     light_ssbo_mapped.clear();
     light_ssbo.clear();
+
+    light_indices_size_ssbo.clear();
+    light_indices_size_ssbo_mapped.clear();
+    light_indices_ssbo.clear();
+    light_indices_ssbo_mapped.clear();
 
     Engine::cleanup();
 }

@@ -21,7 +21,7 @@ layout(std430, binding = 3) readonly buffer PointlightSSBO {
 } pointlights;
 
 layout(std430, binding = 4) readonly buffer LightIndicesSSBO {
-    uint16_t indices[]; 
+    uint indices[]; 
 } light_indices;
 
 layout(std430, binding = 5) readonly buffer LightIndicesSizeSSBO {
@@ -42,7 +42,7 @@ void main(){
     vec3 total_diffuse = vec3(0.0);
 
     for(uint i = light_indices_size.indices[instance_id]; i < light_indices_size.indices[instance_id + 1]; i++){
-        int light_index = light_indices.indices[i];
+        uint light_index = light_indices.indices[i];
 
         vec3 diff = pointlights.lights[light_index].position.xyz - fragPos;
         float dist_sq = dot(diff, diff);

@@ -1,5 +1,5 @@
 CXX = g++
-CFLAGS = -std=c++20 -O2 -Iheaders $(shell sdl2-config --cflags)
+CFLAGS = -std=c++20 -fopenmp -O2 -Iheaders $(shell sdl2-config --cflags)
 LDFLAGS = -lglfw -lvulkan -ldl -lpthread -lX11 -lXxf86vm -lXrandr -lXi $(shell sdl2-config --libs)
 
 SRCS = $(wildcard **/*.cpp) $(wildcard *.cpp)
