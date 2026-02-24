@@ -25,6 +25,8 @@ public:
         velocity = glm::vec3(0.f);
         acceleration = glm::vec3(0.f);
         orientation = glm::quatLookAt(front, up);
+
+        gen.seed(std::random_device{}());
     }
 
     void processKeyboard(CameraMovement direction, float dtime) override;
@@ -51,7 +53,6 @@ private:
     glm::quat orientation;
 
     // Space grid
-    std::vector<std::vector<std::vector<bool>>> grid;
     std::vector<glm::vec4> objs;
     std::vector<uint32_t> levels;
     bool automatic = false;

@@ -162,11 +162,11 @@ void C_camera::createGrid(std::vector<glm::vec4> &centers, uint32_t max_level)
     for(size_t i = 0; i < centers.size(); i++){
         objs[i] = centers[i];
         levels[i] = objs[i].w;
-        if(objs[i].w == max_level){
-            objs[i].w = 0.5 / std::pow(6, max_level - 1);
+        if(objs[i].w == max_level && max_level > 1){
+            objs[i].w = 0.5 / std::pow(6, max_level - 2);
         }
         else{
-            objs[i].w = 1.0 / std::pow(6, objs[i].w);
+            objs[i].w = 1.0 / std::pow(6, objs[i].w - 1);
         }
     }
 
@@ -232,14 +232,12 @@ void C_camera::chooseNext()
         std::uniform_real_distribution<double> distribution(0.0, accumulation); 
         double random_val = distribution(gen);
         size_t i =0;
-        while(random_val - objs[valid_centers[i]].w > 0.f){
+        while(i < valid_centers.size() - 1 && random_val - objs[valid_centers[i]].w > 0.f){
             random_val -= objs[valid_centers[i]].w;
             i++;
         }
         index_obj = valid_centers[i];
-        std::cout << rot_speed << " " << " " << levels[index_obj] << " " << max_level << " " <<  std::pow(2, max_level - levels[index_obj]) << std::endl;
         current_rot = rot_speed / std::pow(2, max_level - levels[index_obj]);
-        std::cout << current_rot << std::endl;
     } 
     else if(!fallback_centers.empty()){
        for(size_t i =0; i < fallback_centers.size(); i++){
@@ -248,7 +246,7 @@ void C_camera::chooseNext()
         std::uniform_real_distribution<double> distribution(0.0, accumulation); 
         double random_val = distribution(gen);
         size_t i =0;
-        while(random_val - objs[fallback_centers[i]].w > 0.f){
+        while(i < fallback_centers.size() - 1 && random_val - objs[fallback_centers[i]].w > 0.f){
             random_val -= objs[fallback_centers[i]].w;
             i++;
         }
