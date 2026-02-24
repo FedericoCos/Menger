@@ -30,6 +30,12 @@ public:
 
     void update(float dtime) override;
 
+    void createGrid(std::vector<glm::vec4> &centers, uint32_t max_level);
+
+    bool isAutomatic(){
+        return automatic;
+    }
+
 private:
     glm::vec3 velocity;
     glm::vec3 acceleration;
@@ -42,7 +48,18 @@ private:
     bool dirty_front = false;
     glm::quat orientation;
 
+    // Space grid
+    std::vector<std::vector<std::vector<bool>>> grid;
+    std::vector<glm::vec4> objs;
+    bool automatic = false;
+    uint32_t index_obj = 0;
+
+    std::default_random_engine gen;
 
 
     void updateCameraVectors() override;
+
+    bool isFree(uint32_t x, uint32_t y, uint32_t z);
+
+    void chooseNext();
 };

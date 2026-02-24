@@ -163,7 +163,7 @@ void Scene::createInitResources(){
         vmaMapMemory(vma_allocator, ubo_camera_mapped[i].buffer.allocation, &ubo_camera_mapped[i].data);
     }
 
-    c_camera = C_camera(glm::vec3(0, 0, 2), 0.3f, 0.01f, 0.001f, 0.05f);
+    c_camera = C_camera(glm::vec3(0, 0, 2), 0.2f, 0.01f, 0.001f, 0.13f);
 
 
 
@@ -451,6 +451,10 @@ void Scene::processInput()
     if(inputs.count(GLFW_KEY_LEFT_SHIFT) && (inputs[GLFW_KEY_LEFT_SHIFT] == InputState::PRESSED || inputs[GLFW_KEY_LEFT_SHIFT] == InputState::HOLD)){
         c_camera.processKeyboard(CameraMovement::T_ROLL_LEFT, time);
     }
+
+    if(inputs.count(GLFW_KEY_R) && (inputs[GLFW_KEY_R] == InputState::PRESSED || inputs[GLFW_KEY_R] == InputState::HOLD) && !c_camera.isAutomatic()){
+        c_camera.createGrid(grid_positions, std::pow(3, current_menger_step-2));
+    }
 }
 
 void Scene::mengerStep()
@@ -473,6 +477,11 @@ void Scene::mengerStep()
 
     std::copy_n(cube_positions.begin(), current_cubes, temp_positions.begin());
 
+    for(size_t i =0; i < free_positions.size(); i++){
+        grid_positions.push_back(free_positions[i]);
+    }
+    free_positions.clear();
+
     for(size_t cube_ind = 0; cube_ind < current_cubes; cube_ind++){
         glm::vec3 &pos = temp_positions[cube_ind];
         for(size_t i = 0; i < 3; i++){ // x dimension
@@ -491,6 +500,18 @@ void Scene::mengerStep()
                             );
 
                             current_pointlights++;
+
+                            grid_positions.push_back(glm::vec4(pos.x + i * cube_size - cube_size,
+                                pos.y + j * cube_size - cube_size,
+                                pos.z + k * cube_size - cube_size,
+                                current_menger_step - 2)
+                            );
+                        }
+                        else{
+                            free_positions.push_back(glm::vec4(pos.x + i * cube_size - cube_size,
+                                pos.y + j * cube_size - cube_size,
+                                pos.z + k * cube_size - cube_size,
+                                current_menger_step - 2));
                         }
 
                         continue;

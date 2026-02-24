@@ -47,6 +47,8 @@ private:
     C_camera c_camera;
     float n_plane = 0.1f;
     float f_plane = 10000.f;
+    std::vector<glm::vec4> free_positions;
+    std::vector<glm::vec4> grid_positions;
 
     // Variables related to light
     uint32_t MAX_LIGHTS = 168421; // 3368421 for level 6 of menger sponge, 168421 for level 5
@@ -66,7 +68,6 @@ private:
         glm::vec3(0.00f, 0.85f, 0.60f), // Level 2: Mint/Teal
         glm::vec3(0.40f, 0.95f, 0.20f), // Level 3: Bioluminescent lime
         glm::vec3(0.80f, 1.00f, 0.60f)  // Level 4: Pale yellow-green
-        // glm::vec3(1.0f, 1.0f, 0.9f)  // Level 5: Soft white
     };
 
     // Variables for the simil deferred shading
