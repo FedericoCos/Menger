@@ -1,29 +1,34 @@
 #include "scene.hpp"
 
-void Scene::createInitResources(){
+void Scene::initialSetup(){
     target_fps = 40;
-
     original_size = cube_size; // For displacement calculations
-    rot_speed = glm::vec3(0);
-    base_light_intensity = 500000.f;
-    intensity_divisor = 9;
-    light_threshold = 0.1;
-    MAX_CONNECTIONS = 100;
-    max_menger_step_lights = 7;
 
-    // Reserving memory for all cubes, instantiating only for one
+    // Reserving memory for all the vectors in scene, so no reallocation is needded
     cube_positions.resize(MAX_CUBES);
     temp_positions.resize(MAX_CUBES);
+    positions.resize(MAX_CUBES);
+
     centers_and_levels.resize(MAX_LIGHTS);
+    pointlight_buffers.resize(MAX_LIGHTS);
     light_indices_size.resize(MAX_CUBES + 1);
     light_indices.resize(MAX_CONNECTIONS * MAX_CUBES);
 
+    // Setting up the main cube
     main_cube = Cube(center, glm::vec3(cube_size), glm::vec3(0.0f), glm::vec3(0.0f), rot_speed, glm::vec3(0.0), center, true);
     main_cube.start(vma_allocator, logical_device, queue_pool);
-
     cube_positions[0] = center;
 
-    // The UBO containing the per-cube info
+    // Setting up the camera
+    c_camera = C_camera(glm::vec3(0, 0, 2), 0.1f, 0.01f, 0.001f, 0.48f, 0.f, glm::vec3(0, 1, 0), -90.f, 0.f, 75.f);
+
+}
+
+void Scene::initCubeResources(){
+    /**
+     * Cube ssbo holds all the positions of the cubes in the scene. 
+     * The mapped SSBO is made for easy write from the CPU, and the one not mapped is used for fast access by the GPU
+     */
     cube_ssbo_mapped.clear();
     cube_ssbo_mapped.resize(queue_pool.max_frames_in_flight);
     vk::DeviceSize gameobject_buffer_size = sizeof(CubeBuffer);
@@ -50,6 +55,9 @@ void Scene::createInitResources(){
         );
     }
 
+    /**
+     * Uniform Buffer of the main cube, to store rotation and scale information that are shared across all cubes
+     */
     single_cube_ubo.clear();
     single_cube_ubo.resize(queue_pool.max_frames_in_flight);
     vk::DeviceSize single_cubo_ubo_size = sizeof(FirstCubeBuffer);
@@ -63,8 +71,15 @@ void Scene::createInitResources(){
         );
         vmaMapMemory(vma_allocator, single_cube_ubo[i].buffer.allocation, &single_cube_ubo[i].data);
     }
+}
 
-    // LIGHTS SETUP
+void Scene::initLightResources(){
+    /**
+     * The light ssbo is used to store all the info about the lights that are needed from the fragment shader
+     * It also tells how many pointlights are currently in the scene
+     * The mapped ssbo is for writing by the CPU
+     * The non mapped version is for fast access from the GPU
+     */
     light_ssbo_mapped.clear();
     light_ssbo_mapped.resize(queue_pool.max_frames_in_flight);
     vk::DeviceSize light_size = sizeof(glm::vec4) + sizeof(PointLightBuffer) * MAX_LIGHTS;
@@ -91,7 +106,10 @@ void Scene::createInitResources(){
         );
     }
 
-    // Simil deferred shading setup
+    /**
+     * This SSBO holds, for each cube, the indices of the light that have a meaningful influence over the final color
+     * of the cube itself
+     */
     light_indices_ssbo_mapped.clear();
     light_indices_ssbo_mapped.resize(queue_pool.max_frames_in_flight);
     vk::DeviceSize light_indices_device_size = sizeof(uint32_t) * (MAX_CONNECTIONS * MAX_CUBES);
@@ -118,7 +136,12 @@ void Scene::createInitResources(){
         );
     }
 
-
+    /**
+     * This SSBO is tightly connected to the previous one
+     * It stores a counter of how many connections there were from the first cube to the last
+     * Thus, to get the total lights influencing a cube, you just need to subtract the value in the array immediately after to 
+     * the one referring to the cube itself
+     */
     light_indices_size_ssbo_mapped.clear();
     light_indices_size_ssbo_mapped.resize(queue_pool.max_frames_in_flight);
     vk::DeviceSize light_indices_size_device_size = sizeof(uint32_t) * (MAX_CUBES + 1);
@@ -144,10 +167,12 @@ void Scene::createInitResources(){
             vma_allocator
         );
     }
+}
 
-
-
-    // CAMERA RESOURCES SETUP
+void Scene::initCameraResources(){
+    /**
+     * A very standard UBO to hold projection and view matrices
+     */
     ubo_camera_mapped.clear();
     ubo_camera_mapped.resize(queue_pool.max_frames_in_flight);
     vk::DeviceSize camera_buffer_size = sizeof(UniformBufferCamera);
@@ -162,11 +187,18 @@ void Scene::createInitResources(){
         );
         vmaMapMemory(vma_allocator, ubo_camera_mapped[i].buffer.allocation, &ubo_camera_mapped[i].data);
     }
+}
 
-    c_camera = C_camera(glm::vec3(0, 0, 2), 0.1f, 0.01f, 0.001f, 0.48f, 0.f, glm::vec3(0, 1, 0), -90.f, 0.f, 75.f);
+void Scene::createInitResources(){
+    initialSetup();
 
+    initCubeResources();
 
+    initLightResources();
 
+    initCameraResources();
+
+    // PIPELINE SETUP
     const std::string vertex_shader_path = "Shaders/Menger/vertex.vert.spv";
     const std::string fragment_shader_path = "Shaders/Menger/fragment.frag.spv";
 
@@ -226,7 +258,7 @@ void Scene::createInitResources(){
         ),
 
     };
-    std::string name = "dumb pipeline";
+    std::string name = "cubes pipeline";
     raster_pipelines.push_back(Pipeline::createsRasterPipeline(vertex_shader_path, fragment_shader_path,
                                                     &bindings, vk::CullModeFlagBits::eBack, swapchain.format, 
                                                     Image::findDepthFormat(physical_device), msaa_samples, 
@@ -247,40 +279,33 @@ void Scene::createInitResources(){
         &light_indices_size_ssbo
     };
     Pipeline::writeDescriptorSets(raster_pipelines[0].descriptor_sets, bindings, resources, logical_device, queue_pool.max_frames_in_flight);
-    
-    pip_to_obj[&raster_pipelines[0]] = std::vector<Gameobject*>();
-    pip_to_obj[&raster_pipelines[0]].push_back(&main_cube);
 
-    mengerStep();
+    mengerStep(); // performing the first step of menger
 }
 
 void Scene::updateUniformBuffers(float dtime, int current_frame)
 {
+    // update the camera and extract the projection and view matrix
     c_camera.update(dtime);
 
     UniformBufferCamera ubo_camera;
-
     ubo_camera.view = c_camera.getViewMatrix();
     ubo_camera.proj = c_camera.getProjectionMatrix(swapchain.extent.width * 1.f / swapchain.extent.height, n_plane, f_plane);
 
     memcpy(ubo_camera_mapped[current_frame].data, &ubo_camera, sizeof(UniformBufferCamera));
 
+    // Writing info about the main cube
     FirstCubeBuffer first_cube;
     main_cube.update(dtime);
     first_cube.rotation_matrix = main_cube.getRotationMatrix();
     first_cube.center_and_scale = glm::vec4(main_cube.getCenterVector(), main_cube.getScaleFactor());
-
     memcpy(single_cube_ubo[current_frame].data, &first_cube, sizeof(FirstCubeBuffer));
 
+    // Updating positions of the cubes if a new menger step took place
     if(dirty_positions < queue_pool.max_frames_in_flight){
         // Writing cubes
         dirty_positions++;
-        if(positions.size() < current_cubes){
-            positions.resize(current_cubes);
-        }
-        positions[0] = glm::vec4(cube_positions[0] - center, 1.0f);
-        size_t i = 1;
-        for(; i < current_cubes; i++){
+        for(size_t i = 0; i < current_cubes; i++){
             positions[i] = glm::vec4(cube_positions[i] - center, 1.0f);
         }
 
@@ -289,14 +314,10 @@ void Scene::updateUniformBuffers(float dtime, int current_frame)
         Device::copyBuffer(cube_ssbo_mapped[current_frame].buffer, cube_ssbo[current_frame].buffer, current_cubes * sizeof(glm::vec4), logical_device, queue_pool, 0);
 
         // Writing lights
-        if(pointlight_buffers.size() < current_pointlights){
-            pointlight_buffers.resize(current_pointlights);
-        }
-
-        if(current_pointlights > 0 && current_menger_step < max_menger_step_lights){
-            for(i = 0; i < current_pointlights; i++){
+        if(current_pointlights > 0){
+            for(size_t i = 0; i < current_pointlights; i++){
                 PointLightBuffer buf;
-                buf.color = glm::vec4(light_colors[centers_and_levels[i].w], base_light_intensity / (centers_and_levels[i].w > 0 ? std::pow(intensity_divisor, centers_and_levels[i].w) : 1));
+                buf.color = glm::vec4(light_colors[centers_and_levels[i].w - 1], base_light_intensity / (centers_and_levels[i].w > 1 ? std::pow(intensity_divisor, centers_and_levels[i].w - 1) : 1));
                 buf.position = glm::vec4(glm::vec3(centers_and_levels[i]), buf.color.w / light_threshold);
 
                 pointlight_buffers[i] = buf;
@@ -389,9 +410,9 @@ void Scene::recordCommandBuffer(uint32_t image_index)
             *raster_pipelines[i].descriptor_sets[current_frame],
             {}
         );
-        command_buffer.bindVertexBuffers(0, pip_to_obj[&raster_pipelines[i]][0] -> getVertexBuffer(), {0});
-        command_buffer.bindIndexBuffer(pip_to_obj[&raster_pipelines[i]][0] -> getIndexBuffer(), 0, vk::IndexType::eUint32);
-        command_buffer.drawIndexed(pip_to_obj[&raster_pipelines[i]][0] -> getIndexSize(), current_cubes, 0, 0, 0);
+        command_buffer.bindVertexBuffers(0, main_cube.getVertexBuffer(), {0});
+        command_buffer.bindIndexBuffer(main_cube.getIndexBuffer(), 0, vk::IndexType::eUint32);
+        command_buffer.drawIndexed(main_cube.getIndexSize(), current_cubes, 0, 0, 0);
     }
     command_buffer.endRendering();
 
@@ -415,7 +436,7 @@ void Scene::recordCommandBuffer(uint32_t image_index)
 
 void Scene::processInput()
 {
-    if(inputs.count(GLFW_KEY_SPACE) && inputs[GLFW_KEY_SPACE] == InputState::PRESSED){
+    if(inputs.count(GLFW_KEY_SPACE) && inputs[GLFW_KEY_SPACE] == InputState::PRESSED && current_menger_level < max_menger_level){
         mengerStep();
         inputs[GLFW_KEY_SPACE] = InputState::RELEASED;
     }
@@ -453,23 +474,17 @@ void Scene::processInput()
     }
 
     if(inputs.count(GLFW_KEY_R) && (inputs[GLFW_KEY_R] == InputState::PRESSED || inputs[GLFW_KEY_R] == InputState::HOLD) && !c_camera.isAutomatic()){
-        c_camera.createGrid(grid_positions, current_menger_step - 2);
+        c_camera.createGrid(grid_positions, current_menger_level);
     }
 }
 
 void Scene::mengerStep()
 {
     dirty_positions = 0;
-    uint32_t dimension_step = std::pow(3, current_menger_step);
+    current_menger_level += 1;
+    uint32_t dimension_step = std::pow(3, current_menger_level);
     cube_size /= 3.0;
-    uint32_t new_cube_tot = std::pow(20, current_menger_step);
-    current_menger_step += 1;
     float cube_size_dim = cube_size - cube_size * 0.1;
-
-    std::cout << "Step: " << current_menger_step
-              << " | Grid: " << dimension_step << "x" << dimension_step 
-              << " | Total cubes: " << new_cube_tot
-              << " | Cube Size: " << cube_size << std::endl;
 
     double start_offset = -(original_size / 2) + (cube_size / 2.0);
     
@@ -477,6 +492,9 @@ void Scene::mengerStep()
 
     std::copy_n(cube_positions.begin(), current_cubes, temp_positions.begin());
 
+    /**
+     * Copying to the camera grid positions the one that become available once you move to the next menger step
+     */
     for(size_t i =0; i < free_positions.size(); i++){
         grid_positions.push_back(free_positions[i]);
     }
@@ -491,29 +509,26 @@ void Scene::mengerStep()
                     if ((i == 1 && j == 1) || 
                         (i == 1 && k == 1) || 
                         (j == 1 && k == 1)){
+                        glm::vec4 new_pos = {
+                            pos.x + i * cube_size - cube_size,
+                            pos.y + j * cube_size - cube_size,
+                            pos.z + k * cube_size - cube_size,
+                            current_menger_level // This is needed to extract the correct color for the light
+                        };
                         if(i == 1 && j == 1 && k == 1 && current_pointlights < MAX_LIGHTS){
-                            centers_and_levels[current_pointlights] = glm::vec4(
-                                pos.x + i * cube_size - cube_size,
-                                pos.y + j * cube_size - cube_size,
-                                pos.z + k * cube_size - cube_size,
-                                current_menger_step - 2 // This is needed to extract the correct color for the light
-                            );
-
+                            centers_and_levels[current_pointlights] = new_pos;
                             current_pointlights++;
-
-                            grid_positions.push_back(glm::vec4(pos.x + i * cube_size - cube_size,
-                                pos.y + j * cube_size - cube_size,
-                                pos.z + k * cube_size - cube_size,
-                                current_menger_step - 2)
-                            );
+                            /**
+                             * Positions free for the camera
+                             */
+                            grid_positions.push_back(new_pos);
                         }
                         else{
-                            free_positions.push_back(glm::vec4(pos.x + i * cube_size - cube_size,
-                                pos.y + j * cube_size - cube_size,
-                                pos.z + k * cube_size - cube_size,
-                                current_menger_step - 2));
+                            /**
+                             * Storing positions for the camera that become available once you move to the next menger step
+                             */
+                            free_positions.push_back(new_pos);
                         }
-
                         continue;
                     }
 
@@ -530,12 +545,13 @@ void Scene::mengerStep()
         }
     }
 
-
-    if(index != new_cube_tot){
-        std::cout << "ERROR! calculated cubes: " << new_cube_tot << " Actual cubes: " << index << std::endl;
-    }
     main_cube.modifyCube(glm::vec3(start_offset, start_offset, -5.5 - (cube_size/2.0)), glm::vec3(cube_size_dim));
     current_cubes = index;
+
+    std::cout << "Level: " << current_menger_level
+              << " | Grid: " << dimension_step << "x" << dimension_step << "x" << dimension_step
+              << " | Total cubes: " << index
+              << " | Cube Size: " << cube_size << std::endl;
 
     connectLights();
 }
@@ -544,7 +560,7 @@ void Scene::connectLights()
 {
     std::vector<float> precomputed_radius(current_pointlights);
     for(size_t j = 0; j < current_pointlights; j++){
-        float intensity = base_light_intensity / (centers_and_levels[j].w > 0 ? std::pow(intensity_divisor, centers_and_levels[j].w) : 1.0f);
+        float intensity = base_light_intensity / (centers_and_levels[j].w > 1 ? std::pow(intensity_divisor, centers_and_levels[j].w - 1) : 1.0f);
         precomputed_radius[j] = std::sqrt(intensity / light_threshold);
     }
 

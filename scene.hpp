@@ -28,12 +28,13 @@ public:
 private:
     // Varibales related to cube
     const uint32_t MAX_CUBES = 3200000;
+    const uint8_t max_menger_level = 5;
     uint32_t current_cubes = 1;
-    uint32_t current_menger_step = 1;
+    uint32_t current_menger_level = 0;
     double cube_size = 2187.0;
     double original_size;
     glm::vec3 center = glm::vec3(0.f, 0.f, -3000.f);
-    glm::vec3 rot_speed = glm::vec3(0.05f, 0.05f, 0.0f);
+    glm::vec3 rot_speed = glm::vec3(0);
     Cube main_cube;
     std::vector<glm::vec3> cube_positions;
     std::vector<glm::vec3> temp_positions;
@@ -51,17 +52,16 @@ private:
     std::vector<glm::vec4> grid_positions;
 
     // Variables related to light
-    uint32_t MAX_LIGHTS = 168421; // 3368421 for level 6 of menger sponge, 168421 for level 5
+    const uint32_t MAX_LIGHTS = 168421;
     std::vector<glm::vec4> centers_and_levels;
     uint32_t current_pointlights = 0;
     uint32_t current_connections = 0;
     std::vector<MappedUBO> light_ssbo_mapped;
     std::vector<MappedUBO> light_ssbo;
     std::vector<PointLightBuffer> pointlight_buffers;
-    float base_light_intensity = 100000.f;
-    uint16_t intensity_divisor = 10;
-    float light_threshold = 0.01;
-    uint8_t max_menger_step_lights = 5;
+    float base_light_intensity = 500000.f;
+    uint16_t intensity_divisor = 9;
+    float light_threshold = 0.1f;
     std::array<glm::vec3, 5> light_colors = {
         glm::vec3(0.00f, 0.10f, 0.50f), // Level 0: Deep marine blue
         glm::vec3(0.00f, 0.50f, 0.80f), // Level 1: Ocean cyan
@@ -91,4 +91,16 @@ private:
 
     // This function takes all the cubes, all the lights, and connects them
     void connectLights();
+
+    // Function to setup all the variables befor initialization
+    void initialSetup();
+
+    // Function to allocate cubes resources for the GPU
+    void initCubeResources();
+
+    // Function to allocate lights resources for the GPU
+    void initLightResources();
+
+    // Function to allocate camera resources for the GPU
+    void initCameraResources();
 };
