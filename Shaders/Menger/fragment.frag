@@ -15,6 +15,11 @@ struct Pointlight{
     vec4 color;
 };
 
+layout(binding = 2) uniform UniformBufferCube{
+    mat4 rotate_matrix;
+    vec4 center_and_scale;
+}cube_ubo;
+
 layout(std430, binding = 3) readonly buffer PointlightSSBO {
     vec4 num; // only first value used for current number of pointlights
     Pointlight lights[]; 
@@ -48,7 +53,12 @@ void main(){
     for(uint i = light_indices_size.indices[instance_id]; i < light_indices_size.indices[instance_id + 1]; i++){
         uint light_index = light_indices.indices[i];
 
-        vec3 diff = pointlights.lights[light_index].position.xyz - fragPos;
+        vec3 pos = pointlights.lights[light_index].position.xyz;
+        mat3 rotate_matrix = mat3(cube_ubo.rotate_matrix);
+        pos = rotate_matrix * pos;
+        pos += cube_ubo.center_and_scale.xyz;
+
+        vec3 diff = pos - fragPos;
         float dist_sq = dot(diff, diff);
 
         float dist = sqrt(dist_sq);

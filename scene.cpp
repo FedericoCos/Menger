@@ -3,6 +3,7 @@
 void Scene::initialSetup(){
     target_fps = 40;
     original_size = cube_size; // For displacement calculations
+    // rot_speed = glm::vec3(0.05f, 0.05f, 0.0f);
 
     // Reserving memory for all the vectors in scene, so no reallocation is needded
     cube_positions.resize(MAX_CUBES);
@@ -226,7 +227,7 @@ void Scene::createInitResources(){
             2,
             vk::DescriptorType::eUniformBuffer,
             1,
-            vk::ShaderStageFlagBits::eVertex,
+            vk::ShaderStageFlagBits::eAll,
             nullptr
         ),
 
@@ -318,7 +319,7 @@ void Scene::updateUniformBuffers(float dtime, int current_frame)
             for(size_t i = 0; i < current_pointlights; i++){
                 PointLightBuffer buf;
                 buf.color = glm::vec4(light_colors[centers_and_levels[i].w - 1], base_light_intensity / (centers_and_levels[i].w > 1 ? std::pow(intensity_divisor, centers_and_levels[i].w - 1) : 1));
-                buf.position = glm::vec4(glm::vec3(centers_and_levels[i]), buf.color.w / light_threshold);
+                buf.position = glm::vec4(glm::vec3(centers_and_levels[i])-center, buf.color.w / light_threshold);
 
                 pointlight_buffers[i] = buf;
             }
@@ -473,7 +474,7 @@ void Scene::processInput()
         c_camera.processKeyboard(CameraMovement::T_ROLL_LEFT, time);
     }
 
-    if(inputs.count(GLFW_KEY_R) && (inputs[GLFW_KEY_R] == InputState::PRESSED || inputs[GLFW_KEY_R] == InputState::HOLD) && !c_camera.isAutomatic()){
+    if(inputs.count(GLFW_KEY_R) && (inputs[GLFW_KEY_R] == InputState::PRESSED || inputs[GLFW_KEY_R] == InputState::HOLD) && !c_camera.isAutomatic() && glm::length2(rot_speed) == 0){
         c_camera.createGrid(grid_positions, current_menger_level);
     }
 }
