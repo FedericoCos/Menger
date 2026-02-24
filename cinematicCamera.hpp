@@ -20,6 +20,7 @@ public:
         this -> thrust = thrust;
         this -> friction = friction;
         this -> rot_speed = rot_speed;
+        this -> current_rot = rot_speed;
 
         velocity = glm::vec3(0.f);
         acceleration = glm::vec3(0.f);
@@ -44,6 +45,7 @@ private:
     float friction;
     float epsilon = 0.001f;
     float rot_speed;
+    float current_rot;
 
     bool dirty_front = false;
     glm::quat orientation;
@@ -51,8 +53,10 @@ private:
     // Space grid
     std::vector<std::vector<std::vector<bool>>> grid;
     std::vector<glm::vec4> objs;
+    std::vector<uint32_t> levels;
     bool automatic = false;
     uint32_t index_obj = 0;
+    uint32_t max_level;
 
     std::default_random_engine gen;
 

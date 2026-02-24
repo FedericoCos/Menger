@@ -76,14 +76,14 @@ void C_camera::update(float dtime)
                 
                 float full_angle = glm::acos(glm::clamp(glm::dot(front, desired_dir), -1.0f, 1.0f));
                 
-                float turn_amount = glm::min(full_angle, glm::radians(rot_speed * dtime));
+                float turn_amount = glm::min(full_angle, glm::radians(current_rot * dtime));
                 
                 glm::quat gentle_turn = glm::angleAxis(turn_amount, rotation_axis);
                 orientation = glm::normalize(gentle_turn * orientation);
                 dirty_front = true;
             } 
             else if (glm::dot(front, desired_dir) < -0.99f) {
-                glm::quat gentle_turn = glm::angleAxis(glm::radians(rot_speed * dtime), up);
+                glm::quat gentle_turn = glm::angleAxis(glm::radians(current_rot * dtime), up);
                 orientation = glm::normalize(gentle_turn * orientation);
                 dirty_front = true;
             }
@@ -156,9 +156,12 @@ void C_camera::update(float dtime)
 
 void C_camera::createGrid(std::vector<glm::vec4> &centers, uint32_t max_level)
 {
+    this -> max_level = max_level;
     objs.resize(centers.size());
+    levels.resize(centers.size());
     for(size_t i = 0; i < centers.size(); i++){
         objs[i] = centers[i];
+        levels[i] = objs[i].w;
         if(objs[i].w == max_level){
             objs[i].w = 0.5 / std::pow(6, max_level - 1);
         }
@@ -228,13 +231,15 @@ void C_camera::chooseNext()
         } 
         std::uniform_real_distribution<double> distribution(0.0, accumulation); 
         double random_val = distribution(gen);
-        std::cout <<  random_val << std::endl;
         size_t i =0;
         while(random_val - objs[valid_centers[i]].w > 0.f){
             random_val -= objs[valid_centers[i]].w;
             i++;
         }
         index_obj = valid_centers[i];
+        std::cout << rot_speed << " " << " " << levels[index_obj] << " " << max_level << " " <<  std::pow(2, max_level - levels[index_obj]) << std::endl;
+        current_rot = rot_speed / std::pow(2, max_level - levels[index_obj]);
+        std::cout << current_rot << std::endl;
     } 
     else if(!fallback_centers.empty()){
        for(size_t i =0; i < fallback_centers.size(); i++){
@@ -248,5 +253,6 @@ void C_camera::chooseNext()
             i++;
         }
         index_obj = fallback_centers[i];
+        current_rot = rot_speed / std::pow(2, max_level - levels[index_obj]);
     }
 }

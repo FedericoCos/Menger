@@ -1,7 +1,7 @@
 #include "scene.hpp"
 
 void Scene::createInitResources(){
-    target_fps = 30;
+    target_fps = 40;
 
     original_size = cube_size; // For displacement calculations
     rot_speed = glm::vec3(0);
@@ -163,7 +163,7 @@ void Scene::createInitResources(){
         vmaMapMemory(vma_allocator, ubo_camera_mapped[i].buffer.allocation, &ubo_camera_mapped[i].data);
     }
 
-    c_camera = C_camera(glm::vec3(0, 0, 2), 0.2f, 0.01f, 0.001f, 0.13f);
+    c_camera = C_camera(glm::vec3(0, 0, 2), 0.1f, 0.01f, 0.001f, 0.48f, 0.f, glm::vec3(0, 1, 0), -90.f, 0.f, 75.f);
 
 
 
@@ -347,7 +347,7 @@ void Scene::recordCommandBuffer(uint32_t image_index)
         command_buffer
     );
 
-    vk::ClearValue  clear_color = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f);
+    vk::ClearValue  clear_color = vk::ClearColorValue(0.008f, 0.014f, 0.020f, 1.0f);
 
     vk::RenderingAttachmentInfo attachment_info{};
     attachment_info.imageView = swapchain.image_views[image_index];
@@ -453,7 +453,7 @@ void Scene::processInput()
     }
 
     if(inputs.count(GLFW_KEY_R) && (inputs[GLFW_KEY_R] == InputState::PRESSED || inputs[GLFW_KEY_R] == InputState::HOLD) && !c_camera.isAutomatic()){
-        c_camera.createGrid(grid_positions, std::pow(3, current_menger_step-2));
+        c_camera.createGrid(grid_positions, current_menger_step - 2);
     }
 }
 
