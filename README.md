@@ -1,6 +1,6 @@
 # Menger Sponge Vulkan Renderer
 
-A high-performance, Vulkan-based 3D rendering engine written in C++ that procedurally generates and visualizes the Menger Sponge fractal. This project leverages modern graphics API features such as GPU instancing, Compute/SSBO-based lighting culling, and multi-threading to handle millions of geometries in real-time.
+A high-performance, Vulkan-based 3D rendering engine written in C++ that procedurally generates and visualizes the Menger Sponge fractal.
 
 ## 🚀 Features
 
